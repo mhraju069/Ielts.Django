@@ -36,6 +36,11 @@ INSTALLED_APPS = [
     'accounts',
     'payments',
     'subscriptions',
+    'reading',
+    'writing',
+    'listening',
+    'speaking',
+    'others',
 
 ]
 
