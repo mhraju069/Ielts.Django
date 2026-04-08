@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     'listening',
     'speaking',
     'others',
+    'ckeditor',
 
 ]
 
