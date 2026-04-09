@@ -25,19 +25,21 @@ class ReadingQuestion(models.Model):
         ('mcq', 'Multiple Choice Question'),
         ('bool', 'True False or Not Given'),
         ('blank', 'Fill in the blanks'),
+        ('match', 'Matching Headings'),
+        ('answer', 'Answer the questions'),
     ]
 
     passage = models.ForeignKey(ReadingPassage, on_delete=models.CASCADE, related_name='questions')
     question_number = models.IntegerField(null=True, blank=True)
     question = models.TextField()
-    question_type = models.CharField(max_length=20, choices=QUESTION_TYPES, default='choice')
+    question_type = models.CharField(max_length=20, choices=QUESTION_TYPES, default='mcq')
     options = models.JSONField(null=True, blank=True)
-    answer = models.CharField(max_length=255)
+    answer = models.JSONField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"Q{self.question_number}: {self.question[:50]}"
+        return f"Q{self.question_number} [{self.question_type}]: {self.question[:50]}"
 
     class Meta:
         verbose_name = 'Reading Question'
