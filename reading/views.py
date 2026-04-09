@@ -1,10 +1,11 @@
-from rest_framework import generics, status
+from rest_framework import generics, status, views
 from rest_framework.response import Response
-
+from django.db.models import Q
 from .models import ReadingPassage
-from .serializers import ReadingPassageSerializer
-# Create your views here.
+from .serializers import ReadingPassageSerializer, ReadingPassageListSerializer
+from .utils import get_reading_passage_queryset
 
+# Create your views here.
 
 
 class CreatePassageQuestionAnswerView(generics.ListCreateAPIView):
@@ -20,3 +21,14 @@ class CreatePassageQuestionAnswerView(generics.ListCreateAPIView):
             return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
         
         return super().create(request, *args, **kwargs)
+
+
+class ReadingPassageListView(views.APIView):
+    def get(self, request):
+        queryset = get_reading_passage_queryset(request)
+        serializer = ReadingPassageListSerializer(queryset, many=True)
+        return Response({
+            'success': True,
+            'message': 'Reading passages fetched successfully',
+            'data': serializer.data
+        })

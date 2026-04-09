@@ -3,10 +3,12 @@ from django.db import transaction
 from .models import ReadingPassage, ReadingQuestion
 
 
+
 class ReadingQuestionSerializer(serializers.ModelSerializer):
     class Meta:
         model = ReadingQuestion
         fields = ['id', 'question_number', 'question', 'question_type', 'options', 'answer']
+
 
 
 class ReadingPassageSerializer(serializers.ModelSerializer):
@@ -30,4 +32,20 @@ class ReadingPassageSerializer(serializers.ModelSerializer):
         ]
         ReadingQuestion.objects.bulk_create(question_objs)
 
-        return passage
+        return passage
+
+
+
+class ReadingQuestionListSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ReadingQuestion
+        fields = ['question_number', 'question', 'question_type', 'options']
+
+
+
+class ReadingPassageListSerializer(serializers.ModelSerializer):
+    questions = ReadingQuestionListSerializer(many=True, read_only=True)
+    
+    class Meta:
+        model = ReadingPassage
+        exclude = ['created_at', 'updated_at']
