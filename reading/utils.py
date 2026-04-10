@@ -1,18 +1,27 @@
+import random
 from .models import *
 from django.db.models import Count
 
 
 def get_reading_passage_queryset():
-    # Fetch one random passage for each level to form a set
-    p1 = ReadingPassage.objects.filter(level=1).order_by('?').first()
-    p2 = ReadingPassage.objects.filter(level=2).order_by('?').first()
-    p3 = ReadingPassage.objects.filter(level=3).order_by('?').first()
-
-    # Get IDs of the passages that exist
-    ids = [p.id for p in [p1, p2, p3] if p]
+    # Fetch random IDs for each level in an optimized way
+    # This avoids expensive DB-side 'order_by(?)' operations
+    passage_data = ReadingPassage.objects.filter(level__in=[1, 2, 3]).values_list('id', 'level')
+    
+    # Group IDs by level
+    grouped_ids = {1: [], 2: [], 3: []}
+    for pid, level in passage_data:
+        if level in grouped_ids:
+            grouped_ids[level].append(pid)
+            
+    # Select one random ID from each level
+    ids = []
+    for level in [1, 2, 3]:
+        if grouped_ids[level]:
+            ids.append(random.choice(grouped_ids[level]))
     
     # Return a queryset containing these passages
-    queryset =  ReadingPassage.objects.filter(id__in=ids).prefetch_related('questions')
+    queryset = ReadingPassage.objects.filter(id__in=ids).prefetch_related('questions')
 
     passage_ids = sorted(list(queryset.values_list('id', flat=True)))
 
