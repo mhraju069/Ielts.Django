@@ -1,4 +1,4 @@
-from .models import ReadingPassage, QuestionSet
+from .models import *
 from django.db.models import Count
 
 
@@ -44,3 +44,48 @@ def get_reading_passage_queryset():
 
 def get_result(set_id, answers):
     return None
+
+
+
+def save_result(set_id, answers, user):
+    try:
+        question_set = QuestionSet.objects.get(id=set_id)
+    except QuestionSet.DoesNotExist:
+        return None
+    try:
+        result = ReadingResult.objects.create(
+            user=user,
+            set=question_set,
+            answers=answers
+        )
+
+        correct_count = 0
+        total_questions = 0
+
+        for question_number, correct_answer in question_set.answers.items():
+            total_questions += 1
+            user_answer = answers.get(question_number)
+
+            if isinstance(correct_answer, list):
+                if isinstance(user_answer, list):
+                    if any(ans.lower() == correct.lower() for ans in user_answer for correct in correct_answer):
+                        correct_count += 1
+                else:
+                    if user_answer and user_answer.lower() in [ans.lower() for ans in correct_answer]:
+                        correct_count += 1
+            else:
+                if user_answer and str(user_answer).lower() == str(correct_answer).lower():
+                    correct_count += 1
+
+        result.score = correct_count
+        result.save()
+
+        return True, result
+
+    except Exception as e:
+        
+        print("Error in reading save result: ", e)
+        
+        return False, None
+
+    

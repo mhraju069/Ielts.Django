@@ -46,7 +46,7 @@ class ReadingPassageListView(views.APIView):
 class ReadingQuestionAnswerSubmitView(views.APIView):
     def post(self, request):
         set_id = request.data.get('set_id')
-        answers = request.data.get('answers', {})
+        answers = request.data.get('answers', [])
 
         if not set_id or not answers:
             return Response({
@@ -55,14 +55,27 @@ class ReadingQuestionAnswerSubmitView(views.APIView):
                 'data': None
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        if not isinstance(answers, dict):
+        if not isinstance(answers, list):
             return Response({
                 'success': False,
-                'message': 'Answers must be a JSON object',
+                'message': 'Answers must be a list',
                 'data': None
             }, status=status.HTTP_400_BAD_REQUEST)
+        
+        success, result = save_result(set_id, answers, request.user)
+
+        if not success:
+            return Response({
+                'success': False,
+                'message': 'Failed to save reading answers',
+                'data': None
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         data = get_result(set_id, answers)
+
+        result.score = data['score']
+        result.save()
+
         return Response({
             'success': True,
             'message': 'Reading answers submitted successfully',
