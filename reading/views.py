@@ -23,6 +23,7 @@ class CreatePassageQuestionAnswerView(generics.ListCreateAPIView):
         return super().create(request, *args, **kwargs)
 
 
+
 class ReadingPassageListView(views.APIView):
     def get(self, request):
         set_id, queryset = get_reading_passage_queryset()
@@ -39,3 +40,33 @@ class ReadingPassageListView(views.APIView):
             'set': set_id,
             'data': serializer.data
         })
+
+
+
+class ReadingQuestionAnswerSubmitView(views.APIView):
+    def post(self, request):
+        set_id = request.data.get('set_id')
+        answers = request.data.get('answers', {})
+
+        if not set_id or not answers:
+            return Response({
+                'success': False,
+                'message': 'Set ID and answers are required',
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if not isinstance(answers, dict):
+            return Response({
+                'success': False,
+                'message': 'Answers must be a JSON object',
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        data = get_result(set_id, answers)
+        return Response({
+            'success': True,
+            'message': 'Reading answers submitted successfully',
+            'data': data
+        })
+        
+    

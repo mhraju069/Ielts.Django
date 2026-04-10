@@ -39,3 +39,8 @@ def get_reading_passage_queryset():
         question_set.save()
     
     return question_set.id, queryset
+
+
+
+def get_result(set_id, answers):
+    return None
