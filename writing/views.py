@@ -1,5 +1,6 @@
 from .serializers import *
 from .models import *
+from .utils import *
 from rest_framework import generics, status, views
 from rest_framework.response import Response
 
@@ -42,3 +43,42 @@ class GetWritingTaskView(views.APIView):
         serializer = WritingTaskSerializer(tasks, many=True)
         
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+
+
+class WritingResultCreateView(views.APIView):
+    def post(self, request, *args, **kwargs):
+        answers = request.data.get('answers', [])
+        task_ids = request.data.get('task', [])
+        
+
+        if not answers or not task_ids:
+            return Response({"status": False, "message": "Answers and task are required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        result = get_result(answers, task_ids)
+        score_val = result['score'] if result and 'score' in result else "0.0"
+
+        obj = WritingResult.objects.create(
+            user=request.user,
+            score=score_val,
+            responses=result['answers']
+        )
+
+        if isinstance(task_ids, list):
+            obj.tasks.set(task_ids)
+        else:  
+            obj.tasks.add(task_ids)
+        
+        count = WritingResult.objects.filter(user=request.user).count()
+        obj.title = f"Writing Test {count}"
+        obj.save()
+
+
+        return Response({
+            "status": True, 
+            "message": "Result saved successfully", 
+            "result": result
+        }, status=status.HTTP_201_CREATED)
+        
+        

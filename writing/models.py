@@ -16,11 +16,11 @@ class WritingTask(models.Model):
 
 
 class WritingResult(models.Model):
-    title = models.CharField(max_length=255)
+    title = models.CharField(max_length=255, null=True, blank=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    tasks = models.ManyToManyField(WritingTask)
-    responses = models.JSONField()
-    score = models.TextField(max_length=10)
+    tasks = models.ManyToManyField(WritingTask, null=True, blank=True)
+    responses = models.JSONField(null=True, blank=True)
+    score = models.TextField(max_length=10, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
