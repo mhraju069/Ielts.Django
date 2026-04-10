@@ -25,7 +25,7 @@ class ReadingQuestion(models.Model):
         ('mcq', 'Multiple Choice Question'),
         ('bool', 'True False or Not Given'),
         ('blank', 'Fill in the blanks'),
-        ('match', 'Matching Headings'),
+        ('match', 'Matching'),
         ('answer', 'Answer the questions'),
     ]
 
@@ -33,8 +33,8 @@ class ReadingQuestion(models.Model):
     question_number = models.IntegerField(null=True, blank=True)
     question = models.TextField()
     question_type = models.CharField(max_length=20, choices=QUESTION_TYPES, default='mcq')
-    options = models.JSONField(null=True, blank=True)
-    answer = models.JSONField(null=True, blank=True)
+    options = models.JSONField(null=True, blank=True, help_text="""For type 'MCQ':- ["a", "b", "c", "d"],    For type 'True/False/Not Given':- ["True", "False", "Not Given"],   For type 'Fill in the blanks':- null,    For type 'Matching':- {"left":["1", "2", "3"], "right":["a", "b", "c"]},    For type 'Answer the questions':- null""")
+    answer = models.JSONField(null=True, blank=True, help_text="""For type 'Matching':- {"1": "a", "2": "b", "3": "c"},    For others: "Text" """)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
