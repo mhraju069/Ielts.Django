@@ -1,9 +1,9 @@
 from rest_framework import generics, status, views
 from rest_framework.response import Response
-from django.db.models import Q
-from .models import ReadingPassage
-from .serializers import ReadingPassageSerializer, ReadingPassageListSerializer
-from .utils import get_reading_passage_queryset
+from django.db.models import Count
+from .models import *
+from .serializers import *
+from .utils import *
 
 # Create your views here.
 
@@ -25,10 +25,17 @@ class CreatePassageQuestionAnswerView(generics.ListCreateAPIView):
 
 class ReadingPassageListView(views.APIView):
     def get(self, request):
-        queryset = get_reading_passage_queryset(request)
-        serializer = ReadingPassageListSerializer(queryset, many=True)
+        set_id, queryset = get_reading_passage_queryset()
+
+        # Pass the set_id to the serializer via context
+        serializer = ReadingPassageListSerializer(
+            queryset, 
+            many=True, 
+        )
+        
         return Response({
             'success': True,
             'message': 'Reading passages fetched successfully',
+            'set': set_id,
             'data': serializer.data
         })
