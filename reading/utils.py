@@ -1,6 +1,11 @@
 import random
 from .models import *
 from django.db.models import Count
+import os
+import json
+from google import genai
+
+
 
 
 def get_reading_passage_queryset():
@@ -52,7 +57,183 @@ def get_reading_passage_queryset():
 
 
 def get_result(set_id, answers):
-    return None
+
+    try:
+        question_set = QuestionSet.objects.get(id=set_id)
+    except QuestionSet.DoesNotExist:
+        return None
+
+    correct_answers = question_set.answers or {}
+
+    # ── 2. Normalise user answers to a dict {str(q_num): answer} ─────────────
+    # Already normalised by the view — answers is a plain dict {"1": val, "2": val, ...}
+
+    # ── 3. Score calculation ──────────────────────────────────────────────────
+    correct_count  = 0
+    total_questions = len(correct_answers)
+    per_question_detail = []
+
+    for q_num, correct_answer in correct_answers.items():
+        user_answer = answers.get(str(q_num))
+        is_correct  = False
+
+        if isinstance(correct_answer, list):
+            if isinstance(user_answer, list):
+                is_correct = any(
+                    str(ua).strip().lower() == str(ca).strip().lower()
+                    for ua in user_answer for ca in correct_answer
+                )
+            else:
+                is_correct = (
+                    user_answer is not None and
+                    str(user_answer).strip().lower() in [str(ca).strip().lower() for ca in correct_answer]
+                )
+        elif isinstance(correct_answer, dict):
+            # Matching type: {left_key: right_value}
+            if isinstance(user_answer, dict):
+                is_correct = all(
+                    str(user_answer.get(k, '')).strip().lower() == str(v).strip().lower()
+                    for k, v in correct_answer.items()
+                )
+        else:
+            is_correct = (
+                user_answer is not None and
+                str(user_answer).strip().lower() == str(correct_answer).strip().lower()
+            )
+
+        if is_correct:
+            correct_count += 1
+
+        per_question_detail.append({
+            'question_number': q_num,
+            'correct_answer' : correct_answer,
+            'user_answer'    : user_answer,
+            'is_correct'     : is_correct,
+        })
+
+    # IELTS Reading band score conversion (40-question scale approximation)
+    raw_score = correct_count
+    accuracy_pct = (correct_count / total_questions * 100) if total_questions else 0
+
+    def raw_to_band(raw, total):
+        if total == 0:
+            return 0.0
+        pct = raw / total
+        if pct >= 0.97: return 9.0
+        if pct >= 0.93: return 8.5
+        if pct >= 0.87: return 8.0
+        if pct >= 0.80: return 7.5
+        if pct >= 0.73: return 7.0
+        if pct >= 0.67: return 6.5
+        if pct >= 0.60: return 6.0
+        if pct >= 0.53: return 5.5
+        if pct >= 0.47: return 5.0
+        if pct >= 0.40: return 4.5
+        if pct >= 0.33: return 4.0
+        return 3.5
+
+    overall_band = raw_to_band(raw_score, total_questions)
+
+    # ── 4. Build Gemini prompt ────────────────────────────────────────────────
+    summary_lines = []
+    for item in per_question_detail:
+        status_str = "✓ Correct" if item['is_correct'] else "✗ Wrong"
+        summary_lines.append(
+            f"  Q{item['question_number']}: {status_str} "
+            f"(correct: {item['correct_answer']}, given: {item['user_answer']})"
+        )
+    performance_summary = "\n".join(summary_lines)
+
+    prompt = f"""
+You are an expert IELTS Reading examiner. A student has just completed an IELTS Reading test.
+
+Test Statistics:
+- Total Questions : {total_questions}
+- Correct Answers : {correct_count}
+- Accuracy        : {accuracy_pct:.1f}%
+- Estimated Band  : {overall_band}
+
+Per-question breakdown:
+{performance_summary}
+
+Based on the above data, generate a structured JSON feedback report. 
+Return ONLY valid JSON with this exact structure (no markdown, no explanation):
+
+{{
+  "score": <overall_band_score as float, e.g. 7.5>,
+  "criteria": {{
+    "Reading Accuracy"    : <band 1-9 as float>,
+    "Skimming & Scanning": <band 1-9 as float>,
+    "Vocabulary Range"   : <band 1-9 as float>,
+    "Time Management"    : <band 1-9 as float>
+  }},
+  "strengths": [
+    "<strength 1>",
+    "<strength 2>",
+    "<strength 3>"
+  ],
+  "areas_for_improvement": [
+    "<area 1>",
+    "<area 2>",
+    "<area 3>"
+  ],
+  "performance_breakdown": "<2-3 sentence overall summary of the student's reading performance>"
+}}
+"""
+
+    # ── 5. Call Gemini API ────────────────────────────────────────────────────
+    try:
+        api_key = os.getenv("GEMINI_API_KEY")
+        client   = genai.Client(api_key=api_key)
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=prompt,
+        )
+        raw_text = response.text.strip()
+
+        # Strip markdown code fences if present
+        if raw_text.startswith("```"):
+            raw_text = raw_text.split("```")[1]
+            if raw_text.startswith("json"):
+                raw_text = raw_text[4:]
+            raw_text = raw_text.strip()
+
+        feedback = json.loads(raw_text)
+
+    except Exception as e:
+        print("Gemini API error in reading get_result:", e)
+        # Graceful fallback – return rule-based result so the endpoint doesn't break
+        feedback = {
+            "score"   : overall_band,
+            "criteria": {
+                "Reading Accuracy"    : overall_band,
+                "Skimming & Scanning" : round(overall_band - 0.5, 1),
+                "Vocabulary Range"    : round(overall_band - 0.5, 1),
+                "Time Management"     : round(overall_band, 1),
+            },
+            "strengths": [
+                "Completed the test",
+                f"Answered {correct_count} out of {total_questions} questions correctly",
+            ],
+            "areas_for_improvement": [
+                "Review incorrect answers carefully",
+                "Practice skimming for main ideas",
+                "Build academic vocabulary",
+            ],
+            "performance_breakdown": (
+                f"You scored {correct_count}/{total_questions} ({accuracy_pct:.1f}%), "
+                f"which corresponds to an IELTS band of approximately {overall_band}. "
+                "Keep practising to improve your reading speed and accuracy."
+            ),
+        }
+
+    # Always attach raw score for the view to save
+    feedback["score"]      = feedback.get("score", overall_band)
+    feedback["raw_score"]  = raw_score
+    feedback["total"]      = total_questions
+    feedback["accuracy"]   = round(accuracy_pct, 1)
+
+    return feedback
 
 
 

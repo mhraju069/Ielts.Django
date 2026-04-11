@@ -4,6 +4,7 @@ from django.db.models import Count
 from .models import *
 from .serializers import *
 from .utils import *
+from rest_framework.permissions import IsAuthenticated
 
 # Create your views here.
 
@@ -44,6 +45,8 @@ class ReadingPassageListView(views.APIView):
 
 
 class ReadingQuestionAnswerSubmitView(views.APIView):
+    permission_classes = [IsAuthenticated]
+    
     def post(self, request):
         set_id = request.data.get('set_id')
         answers = request.data.get('answers', [])
@@ -55,13 +58,23 @@ class ReadingQuestionAnswerSubmitView(views.APIView):
                 'data': None
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        if not isinstance(answers, list):
+        if not isinstance(answers, (list, dict)):
             return Response({
                 'success': False,
-                'message': 'Answers must be a list',
+                'message': 'Answers must be a dict or list',
                 'data': None
             }, status=status.HTTP_400_BAD_REQUEST)
-        
+
+        # Normalise answers → plain dict {"question_number": answer}
+        # Supports:
+        #   • dict  : {"1": "val", "2": "val", ...}           ← preferred
+        #   • list  : [{"1": "val", "2": "val", ...}]          ← single-dict wrapped in list
+        if isinstance(answers, list):
+            merged = {}
+            for item in answers:
+                if isinstance(item, dict):
+                    merged.update(item)
+            answers = merged
         success, result = save_result(set_id, answers, request.user)
 
         if not success:
@@ -73,7 +86,8 @@ class ReadingQuestionAnswerSubmitView(views.APIView):
 
         data = get_result(set_id, answers)
 
-        result.score = data['score']
+        # raw_score = number of correct answers (int) – compatible with IntegerField
+        result.score = data.get('raw_score', result.score)
         result.save()
 
         return Response({
