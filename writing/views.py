@@ -3,6 +3,7 @@ from .models import *
 from .utils import *
 from rest_framework import generics, status, views
 from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
 
 
 
@@ -48,37 +49,46 @@ class GetWritingTaskView(views.APIView):
 
 
 class WritingResultCreateView(views.APIView):
+    permission_classes = [IsAuthenticated]
+
     def post(self, request, *args, **kwargs):
-        answers = request.data.get('answers', [])
+        answers  = request.data.get('answers', [])
         task_ids = request.data.get('task', [])
-        
 
         if not answers or not task_ids:
-            return Response({"status": False, "message": "Answers and task are required"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"status": False, "message": "Answers and task are required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         result = get_result(answers, task_ids)
-        score_val = result['score'] if result and 'score' in result else "0.0"
+
+        if not result:
+            return Response(
+                {"status": False, "message": "Failed to evaluate writing result"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        score_val      = result.get('score', '0.0')
+        db_responses   = result.get('db_responses', {})
 
         obj = WritingResult.objects.create(
-            user=request.user,
-            score=score_val,
-            responses=result['answers']
+            user      = request.user,
+            score     = str(score_val),
+            responses = db_responses,
         )
 
         if isinstance(task_ids, list):
             obj.tasks.set(task_ids)
-        else:  
+        else:
             obj.tasks.add(task_ids)
-        
-        count = WritingResult.objects.filter(user=request.user).count()
-        obj.title = f"Writing Test {count}"
+
+        count      = WritingResult.objects.filter(user=request.user).count()
+        obj.title  = f"Writing Test {count}"
         obj.save()
 
-
         return Response({
-            "status": True, 
-            "message": "Result saved successfully", 
-            "result": result
+            "status" : True,
+            "message": "Result saved successfully",
+            "result" : result
         }, status=status.HTTP_201_CREATED)
-        
-        
