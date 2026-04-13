@@ -74,7 +74,7 @@ class ReadingResult(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.user.username} - {self.title or 'No Title'} ({self.score})"
+        return f"{self.user.email} - {self.title or 'No Title'} ({self.score})"
 
     class Meta:
         verbose_name = 'Reading Result'
