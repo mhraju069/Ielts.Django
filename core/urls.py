@@ -17,6 +17,7 @@ urlpatterns = [
     path('api/', include('others.urls')),
     path('api/reading/', include('reading.urls')),
     path('api/writing/', include('writing.urls')),
+    path('api/speaking/', include('speaking.urls')),
 ]
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
