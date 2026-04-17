@@ -18,6 +18,8 @@ urlpatterns = [
     path('api/reading/', include('reading.urls')),
     path('api/writing/', include('writing.urls')),
     path('api/speaking/', include('speaking.urls')),
+    path('api/payments/', include('payments.urls')),
+    path('api/subscriptions/', include('subscriptions.urls')),
 ]
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
