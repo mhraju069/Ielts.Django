@@ -75,16 +75,16 @@ TEMPLATES = [
     },
 ]
 
-# ASGI_APPLICATION = 'core.asgi.application'
+ASGI_APPLICATION = 'core.asgi.application'
 
-# CHANNEL_LAYERS = {
-#     'default': {
-#         'BACKEND': 'channels_redis.core.RedisChannelLayer',
-#         'CONFIG': {
-#             "hosts": [(os.getenv('REDIS_HOST', '127.0.0.1'), 6379)],
-#         },
-#     },
-# }
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            "hosts": [(os.getenv('REDIS_HOST', '127.0.0.1'), 6379)],
+        },
+    },
+}
 
 DATABASES = {
     'default': {
@@ -149,4 +149,7 @@ EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL")
 CONTACT_EMAIL = os.getenv("CONTACT_EMAIL")
 
+
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://redis:6379/0")
+CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://redis:6379/0")
 
