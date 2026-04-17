@@ -41,7 +41,7 @@ class GetWritingTaskView(views.APIView):
         
         # We need to serialize the model instances before returning them in the response
         tasks = [task for task in [task1, task2] if task is not None]
-        serializer = WritingTaskSerializer(tasks, many=True)
+        serializer = WritingTaskSerializer(tasks, many=True, context={'request': request})
         
         return Response(serializer.data, status=status.HTTP_200_OK)
 
