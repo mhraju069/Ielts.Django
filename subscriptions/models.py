@@ -4,20 +4,22 @@ from django.utils import timezone
 from datetime import timedelta
 from dateutil.relativedelta import relativedelta
 from django.core.exceptions import ValidationError
+import uuid
 # Create your models here.
 
 
 class Plan(models.Model):
     PLAN = [
+        ("free", "Free"),
         ("pro", "Pro"),
         ("vip", "Vip"),
     ]
     DURATION = [
-        ("months", "Monthly"),
+        ("month", "Monthly"),
         ("permanent", "Permanent"),
     ]
-
-    name = models.CharField(max_length=20, choices=PLAN)
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=20, choices=PLAN,unique=True)
     data = models.JSONField(default=list)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     duration = models.CharField(max_length=20, choices=DURATION)
@@ -26,22 +28,11 @@ class Plan(models.Model):
     def __str__(self):
         return f"{self.get_name_display()} ({self.get_duration_display()})"
 
-    def save(self, *args, **kwargs):
-        if self.name in ["pro", "vip"]:
-            existing = Plan.objects.filter(
-                name=self.name,
-                duration=self.duration,
-            ).exclude(id=self.id)
 
-            if existing.exists():
-                raise ValidationError(
-                    f"A default plan with name '{self.name}' already exists."
-                )
-
-        super().save(*args, **kwargs)
 
 
 class Subscriptions(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='subscriptions', on_delete=models.CASCADE)
     plan = models.ForeignKey(Plan, on_delete=models.CASCADE)
     start = models.DateTimeField(blank=True, null=True)
@@ -56,7 +47,7 @@ class Subscriptions(models.Model):
 
         if not self.end and plan_obj:
 
-            if plan_obj.duration == 'months':
+            if plan_obj.duration == 'month':
                 self.end = self.start + relativedelta(months=1)
         
         super().save(*args, **kwargs)
