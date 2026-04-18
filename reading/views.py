@@ -81,9 +81,9 @@ class ReadingQuestionAnswerSubmitView(views.APIView):
         if not success:
             return Response({
                 'success': False,
-                'message': 'Failed to save reading answers',
+                'message': result if result else 'Failed to save reading answers',
                 'data': None
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            }, status=status.HTTP_400_BAD_REQUEST)
 
         data = get_result(set_id, answers)
 

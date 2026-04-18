@@ -241,8 +241,11 @@ def save_result(set_id, answers, user):
     try:
         question_set = QuestionSet.objects.get(id=set_id)
     except QuestionSet.DoesNotExist:
-        return None
+        return None, "Question set not found"
     try:
+        if question_set.is_ended():
+            return False, "Exam time already ended."
+        
         title = Results.objects.filter(user=user, type='reading').count() + 1
         result = Results.objects.create(
             name = f"Result of Reading Test {title}",
@@ -290,9 +293,7 @@ def save_result(set_id, answers, user):
         return True, result
 
     except Exception as e:
-        
         print("Error in reading save result: ", e)
-        
-        return False, None
+        return False, str(e)
 
     

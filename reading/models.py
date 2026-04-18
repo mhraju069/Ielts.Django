@@ -1,6 +1,8 @@
 from django.db import models
 from django.conf import settings
 import uuid
+from datetime import timedelta
+from django.utils import timezone
 # Create your models here.
 
 
@@ -52,14 +54,15 @@ class QuestionSet(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     passages = models.ManyToManyField(ReadingPassage)
     answers = models.JSONField(null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    start = models.DateTimeField(auto_now_add=True)
+    duration = models.DurationField(default=timedelta(minutes=60))
 
     def __str__(self):
         return f"Question Set {self.id}"
+    
+    def is_ended(self):
+        return timezone.now() > (self.start + self.duration)
 
     class Meta:
         verbose_name = 'Question Set'
         verbose_name_plural = 'Question Sets'
-
-
