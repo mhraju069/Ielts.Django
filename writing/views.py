@@ -4,6 +4,7 @@ from .utils import *
 from rest_framework import generics, status, views
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from others.models import Results
 
 
 
@@ -61,7 +62,7 @@ class WritingResultCreateView(views.APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        result = get_result(answers, task_ids)
+        result = get_result(answers, task_ids, request.user)
 
         if not result:
             return Response(
@@ -69,23 +70,6 @@ class WritingResultCreateView(views.APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-        score_val      = result.get('score', '0.0')
-        db_responses   = result.get('db_responses', {})
-
-        obj = WritingResult.objects.create(
-            user      = request.user,
-            score     = str(score_val),
-            responses = db_responses,
-        )
-
-        if isinstance(task_ids, list):
-            obj.tasks.set(task_ids)
-        else:
-            obj.tasks.add(task_ids)
-
-        count      = WritingResult.objects.filter(user=request.user).count()
-        obj.title  = f"Writing Test {count}"
-        obj.save()
 
         return Response({
             "status" : True,

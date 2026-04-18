@@ -2,53 +2,31 @@ from .models import *
 import os
 import json
 import mimetypes
-from google import genai
-from google.genai import types
+import base64
+from openai import OpenAI
+from others.models import Results
 
 
-def _load_image_part(image_field):
+def _load_image_base64(image_field):
     """
-    Reads an ImageField file from disk and returns a Gemini Part object.
-    Returns None if the image cannot be read.
+    Reads an ImageField file from disk and returns its base64 string.
     """
     try:
         image_path = image_field.path
-        mime_type, _ = mimetypes.guess_type(image_path)
-        mime_type = mime_type or "image/jpeg"
         with open(image_path, "rb") as f:
-            img_bytes = f.read()
-        return types.Part.from_bytes(data=img_bytes, mime_type=mime_type)
+            return base64.b64encode(f.read()).decode('utf-8')
     except Exception as e:
         print(f"Could not load graph image: {e}")
         return None
 
 
-def get_result(answers, task_ids):
-    """
-    Evaluate user's writing answers using Gemini AI.
+def get_result(answers, task_ids, user):
 
-    For 'graph' type tasks that have an image attached, the graph image is
-    sent alongside the student's answer so Gemini can visually evaluate how
-    well the graph was described (multimodal).
-
-    For 'text' (essay) tasks, only the written answer and task prompt are sent.
-
-    Args:
-        answers  (list | dict): Student's written responses.
-        task_ids (list | int) : WritingTask PK(s) answered.
-
-    Returns:
-        dict: Structured IELTS feedback + db_responses for saving.
-    """
-
-    # ── 1. Normalise task_ids ─────────────────────────────────────────────────
     if not isinstance(task_ids, list):
         task_ids = [task_ids]
 
-    # ── 2. Fetch task objects ordered by level ────────────────────────────────
     tasks = list(WritingTask.objects.filter(id__in=task_ids).order_by('level'))
 
-    # ── 3. Normalise answers → list of strings ────────────────────────────────
     if isinstance(answers, dict):
         answers_list = [answers[k] for k in sorted(answers.keys(), key=lambda x: int(x))]
     elif isinstance(answers, list):
@@ -56,10 +34,9 @@ def get_result(answers, task_ids):
     else:
         answers_list = [str(answers)]
 
-    # ── 4. Build per-task data ────────────────────────────────────────────────
-    task_sections  = []   # text blocks for the prompt
-    image_parts    = []   # Gemini image Part objects (graph tasks only)
-    answers_for_db = {}   # stored in WritingResult.responses
+    task_sections  = []   
+    image_parts    = []   
+    answers_for_db = {}   
 
     for i, task in enumerate(tasks):
         user_answer = answers_list[i] if i < len(answers_list) else ""
@@ -73,11 +50,10 @@ def get_result(answers, task_ids):
             "has_image"    : bool(task.type == "graph" and task.image),
         }
 
-        # Graph task with image → load image for multimodal call
         if task.type == "graph" and task.image:
-            part = _load_image_part(task.image)
-            if part:
-                image_parts.append((i + 1, part))   # (task_number, Part)
+            img_base64 = _load_image_base64(task.image)
+            if img_base64:
+                image_parts.append(img_base64)
                 task_sections.append(
                     f"--- TASK {i + 1} (Level {task.level} | Type: Graph/Chart) ---\n"
                     f"Task Question: {task.question}\n\n"
@@ -86,14 +62,12 @@ def get_result(answers, task_ids):
                     f"Student Answer:\n{user_answer}\n"
                 )
             else:
-                # Image load failed → fall back to text-only for this task
                 task_sections.append(
                     f"--- TASK {i + 1} (Level {task.level} | Type: Graph/Chart) ---\n"
                     f"Task Question: {task.question}\n\n"
                     f"Student Answer:\n{user_answer}\n"
                 )
         else:
-            # Essay / text task → text only
             task_sections.append(
                 f"--- TASK {i + 1} (Level {task.level} | Type: Essay) ---\n"
                 f"Task Question: {task.question}\n\n"
@@ -102,7 +76,6 @@ def get_result(answers, task_ids):
 
     combined_tasks = "\n\n".join(task_sections)
 
-    # ── 5. Build prompt text ──────────────────────────────────────────────────
     graph_note = (
         "\nIMPORTANT: For graph/chart tasks, you have been provided the actual graph image. "
         "Use it to verify whether the student accurately identified key trends, data points, "
@@ -149,36 +122,34 @@ Return ONLY valid JSON with this exact structure (no markdown, no explanation ou
 }}
 """
 
-    # ── 6. Build Gemini contents list (multimodal if graph images exist) ──────
-    #
-    # Layout: [image_1, label_1, image_2, label_2, ..., full_prompt_text]
-    # Gemini reads the content in order, so images come before the text that
-    # references them.
-    contents = []
-    for task_num, img_part in image_parts:
-        contents.append(img_part)
-        contents.append(
-            types.Part.from_text(text=f"[Graph image for Task {task_num}]")
-        )
-    contents.append(types.Part.from_text(text=prompt_text))
-
-    # ── 7. Call Gemini API ────────────────────────────────────────────────────
+    # ── 6. Call OpenRouter API ────────────────────────────────────────────────
     try:
-        api_key  = os.getenv("GEMINI_API_KEY")
-        client   = genai.Client(api_key=api_key)
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=contents,
+        api_key = os.getenv("OPENROUTER_API_KEY")
+        client = OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=api_key,
         )
-        raw_text = response.text.strip()
 
-        # Strip markdown code fences if present
-        if raw_text.startswith("```"):
-            raw_text = raw_text.split("```")[1]
-            if raw_text.startswith("json"):
-                raw_text = raw_text[4:]
-            raw_text = raw_text.strip()
+        content_list = [{"type": "text", "text": prompt_text}]
+        for img_b64 in image_parts:
+            content_list.append({
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:image/jpeg;base64,{img_b64}"
+                }
+            })
 
+        response = client.chat.completions.create(
+            model="google/gemini-2.0-flash-001",
+            messages=[
+                {
+                    "role": "user",
+                    "content": content_list
+                }
+            ],
+            response_format={ "type": "json_object" }
+        )
+        raw_text = response.choices[0].message.content.strip()
         feedback = json.loads(raw_text)
 
     except Exception as e:
@@ -216,7 +187,32 @@ Return ONLY valid JSON with this exact structure (no markdown, no explanation ou
             ),
         }
 
-    # Attach DB payload — not exposed to the API response consumer
     feedback["db_responses"] = answers_for_db
+
+
+    
+    score_val = feedback.get('score', '0.0')
+
+    tasks_data = []
+    for t in tasks:
+        tasks_data.append({
+            "id": t.id,
+            "title": t.title,
+            "type": t.type,
+            "question": t.question,
+            "level": t.level,
+            "image": t.image.url if t.image else None
+        })
+
+    count = Results.objects.filter(user=user, type="writing").count() + 1
+
+    Results.objects.create(
+        user      = user,
+        name      = f"Writing Test {count}",
+        score     = str(score_val),
+        answers   = feedback,
+        type      = "writing",
+        questions = tasks_data
+    )
 
     return feedback
