@@ -20,12 +20,14 @@ def _load_image_base64(image_field):
         return None
 
 
-def get_result(answers, task_ids, user):
+def get_result(answers, session, user):
 
-    if not isinstance(task_ids, list):
-        task_ids = [task_ids]
+    if isinstance(session, (str, uuid.UUID)):
+        session = WritingTask.objects.get(id=session)
 
-    tasks = list(WritingTask.objects.filter(id__in=task_ids).order_by('level'))
+    # Use the session to get the linked questions
+    tasks = list(session.question.all().order_by('level'))
+    task_ids = [str(t.id) for t in tasks]
 
     if isinstance(answers, dict):
         answers_list = [answers[k] for k in sorted(answers.keys(), key=lambda x: int(x))]

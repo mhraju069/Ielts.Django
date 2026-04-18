@@ -4,16 +4,22 @@ from .models import *
 
 
 
-class WritingTaskListSerializer(serializers.ListSerializer):
+class WritingQuestionListSerializer(serializers.ListSerializer):
     def create(self, validated_data):
-        tasks = [WritingTask(**item) for item in validated_data]
-        return WritingTask.objects.bulk_create(tasks)
+        questions = [WritingQuestion(**item) for item in validated_data]
+        return WritingQuestion.objects.bulk_create(questions)
 
+
+class WritingQuestionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = WritingQuestion
+        fields = ['id', 'title', 'type', 'question', 'level', 'image']
+        list_serializer_class = WritingQuestionListSerializer
 
 
 class WritingTaskSerializer(serializers.ModelSerializer):
+    question = WritingQuestionSerializer(many=True, read_only=True)
     class Meta:
         model = WritingTask
-        fields = ['id', 'title', 'type', 'question', 'level', 'image']
-        list_serializer_class = WritingTaskListSerializer
+        fields = ['id', 'question', 'start', 'duration']
 
