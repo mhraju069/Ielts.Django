@@ -63,26 +63,3 @@ class QuestionSet(models.Model):
         verbose_name_plural = 'Question Sets'
 
 
-
-class ReadingResult(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    title = models.CharField(max_length=255, null=True, blank=True)
-    set = models.ForeignKey(QuestionSet, on_delete=models.CASCADE)
-    answers = models.JSONField(null=True, blank=True)
-    score = models.IntegerField(null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f"{self.user.email} - {self.title or 'No Title'} ({self.score})"
-
-    class Meta:
-        verbose_name = 'Reading Result'
-        verbose_name_plural = 'Reading Results'
-
-    def save(self, *args, **kwargs):
-        if not self.title:
-            serial = ReadingResult.objects.filter(user=self.user).count()
-            self.title = f"Reading Test {serial + 1}"
-        super().save(*args, **kwargs)
-

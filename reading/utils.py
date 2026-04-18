@@ -4,6 +4,7 @@ from django.db.models import Count
 import os
 import json
 from google import genai
+from others.models import Results
 
 
 
@@ -243,11 +244,28 @@ def save_result(set_id, answers, user):
     except QuestionSet.DoesNotExist:
         return None
     try:
-        result = ReadingResult.objects.create(
+        title = Results.objects.filter(user=user, type='reading').count() + 1
+        result = Results.objects.create(
+            name = f"Result of Reading Test {title}",
             user=user,
-            set=question_set,
-            answers=answers
+            answers=answers,
+            type = 'reading',
+            score = 0
         )
+
+        passages_list = []
+        for passage in question_set.passages.prefetch_related('questions'):
+            p_data = {
+                'id': passage.id,
+                'title': passage.title,
+                'content': passage.content,
+                'level': passage.level,
+                'questions': list(passage.questions.values('id', 'question_number', 'question', 'question_type', 'options'))
+            }
+            passages_list.append(p_data)
+        
+        result.questions = passages_list
+        result.save()
 
         correct_count = 0
         total_questions = 0

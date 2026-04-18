@@ -5,3 +5,4 @@ from unfold.admin import ModelAdmin
 # Register your models here.
 
 admin.site.register(Blog,ModelAdmin)
+admin.site.register(Results,ModelAdmin)
