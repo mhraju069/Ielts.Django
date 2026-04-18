@@ -48,8 +48,12 @@ class ReadingQuestionAnswerSubmitView(views.APIView):
     permission_classes = [IsAuthenticated]
     
     def post(self, request):
-        set_id = request.data.get('set_id')
-        answers = request.data.get('answers', [])
+        data = request.data
+        if isinstance(data, list) and len(data) > 0:
+            data = data[0]
+            
+        set_id = data.get('set_id')
+        answers = data.get('answers', [])
 
         if not set_id or not answers:
             return Response({
@@ -65,10 +69,7 @@ class ReadingQuestionAnswerSubmitView(views.APIView):
                 'data': None
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        # Normalise answers → plain dict {"question_number": answer}
-        # Supports:
-        #   • dict  : {"1": "val", "2": "val", ...}           ← preferred
-        #   • list  : [{"1": "val", "2": "val", ...}]          ← single-dict wrapped in list
+
         if isinstance(answers, list):
             merged = {}
             for item in answers:
@@ -86,7 +87,6 @@ class ReadingQuestionAnswerSubmitView(views.APIView):
 
         data = get_result(set_id, answers)
 
-        # raw_score = number of correct answers (int) – compatible with IntegerField
         result.score = data.get('raw_score', result.score)
         result.save()
 

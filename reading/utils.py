@@ -3,7 +3,7 @@ from .models import *
 from django.db.models import Count
 import os
 import json
-from google import genai
+from openai import OpenAI
 from others.models import Results
 
 
@@ -182,23 +182,22 @@ Return ONLY valid JSON with this exact structure (no markdown, no explanation):
 }}
 """
 
-    # ── 5. Call Gemini API ────────────────────────────────────────────────────
+    # ── 5. Call OpenRouter API ────────────────────────────────────────────────
     try:
-        api_key = os.getenv("GEMINI_API_KEY")
-        client   = genai.Client(api_key=api_key)
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=prompt,
+        api_key = os.getenv("OPENROUTER_API_KEY")
+        client = OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=api_key,
         )
-        raw_text = response.text.strip()
-
-        # Strip markdown code fences if present
-        if raw_text.startswith("```"):
-            raw_text = raw_text.split("```")[1]
-            if raw_text.startswith("json"):
-                raw_text = raw_text[4:]
-            raw_text = raw_text.strip()
-
+        
+        response = client.chat.completions.create(
+            model="google/gemini-2.0-flash-001",
+            messages=[
+                {"role": "user", "content": prompt}
+            ],
+            response_format={ "type": "json_object" }
+        )
+        raw_text = response.choices[0].message.content.strip()
         feedback = json.loads(raw_text)
 
     except Exception as e:
