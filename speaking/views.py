@@ -3,6 +3,9 @@ from rest_framework.response import Response
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from .models import *
 from .utils import generate_speaking_questions, get_transcript, get_result
+from django.db import transaction
+from others.models import Results
+from rest_framework.permissions import IsAuthenticated
 
 
 
@@ -28,14 +31,15 @@ class GenerateSpeakingSessionView(views.APIView):
 
 
 class SpeakingResultView(views.APIView):
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         data = request.data
 
-        part1_audio = data.get('part1_audio')
-        part2_audio = data.get('part2_audio')
-        part3_audio = data.get('part3_audio')
-        session_id  = data.get('session_id')
+        part1_audio = data.get('audio1')
+        part2_audio = data.get('audio2')
+        part3_audio = data.get('audio3')
+        session_id  = data.get('session')
 
         # Validation
         missing = [
@@ -56,6 +60,18 @@ class SpeakingResultView(views.APIView):
         try:
             question_set = QuestionSet.objects.get(id=session_id)
             questions = question_set.questions
+            with transaction.atomic():
+                SpeakingAnswer.objects.bulk_create([
+                    SpeakingAnswer(session=question_set, part=1, audio=part1_audio),
+                    SpeakingAnswer(session=question_set, part=2, audio=part2_audio),
+                    SpeakingAnswer(session=question_set, part=3, audio=part3_audio),
+                ])
+
+            if question_set.is_ended():
+                return Response(
+                    {'status': False, 'error': 'Test has ended'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
         except QuestionSet.DoesNotExist:
             return Response(
                 {'status': False, 'error': 'Invalid or expired session_id'},
@@ -94,11 +110,15 @@ class SpeakingResultView(views.APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        # Save result to DB
-        SpeakingResult.objects.create(
-            questions=questions,
-            response=result,
-            score=result.get('overall_band_score'),
+        # Save result to the unified Results table
+        count = Results.objects.filter(user=request.user, type='speaking').count() + 1
+        Results.objects.create(
+            user      = request.user,
+            name      = f"Speaking Test {count}",
+            score     = str(result.get('overall_band_score', '0.0')),
+            type      = 'speaking',
+            questions = questions, # The evaluation prompt's questions
+            answers   = result     # The full AI feedback and transcripts
         )
 
         return Response({

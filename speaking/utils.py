@@ -1,54 +1,29 @@
 import os
 import json
-import tempfile
-import requests
+import base64
+from openai import OpenAI
 
 OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY')
 
-def get_openrouter_response(prompt: str, model: str = "google/gemini-2.0-flash-001") -> str:
-    """Helper to call OpenRouter API"""
-    headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "Content-Type": "application/json"
-    }
-    data = {
-        "model": model,
-        "messages": [{"role": "user", "content": prompt}]
-    }
-    response = requests.post(
-        "https://openrouter.ai/api/v1/chat/completions",
-        headers=headers,
-        json=data
+def get_client():
+    return OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=OPENROUTER_API_KEY,
     )
-    if response.status_code != 200:
-        raise Exception(f"OpenRouter API Error: {response.text}")
-    
-    return response.json()["choices"][0]["message"]["content"]
+
+def get_openrouter_response(prompt: str, model: str = "google/gemini-2.0-flash-001") -> str:
+    """Helper to call OpenRouter API using OpenAI client"""
+    client = get_client()
+    response = client.chat.completions.create(
+        model=model,
+        messages=[{"role": "user", "content": prompt}]
+    )
+    return response.choices[0].message.content
 
 
 
 def generate_speaking_questions() -> dict:
-    """
-    Generates a complete set of IELTS Speaking test questions using Gemini AI.
-    Nothing is saved to the database — a fresh set is generated each call.
 
-    Returns a dict:
-        {
-            "part1": {
-                "topic": str,
-                "questions": [str, str, str, str, str]   # 5 questions
-            },
-            "part2": {
-                "topic": str,
-                "cue_card": str,          # multi-line instructions
-                "points_to_cover": [str]  # bullet points
-            },
-            "part3": {
-                "topic": str,
-                "questions": [str, str, str, str, str]   # 4-5 discussion questions
-            }
-        }
-    """
     prompt = """
     You are an official IELTS Speaking examiner creating a brand-new, unique test session.
     Generate a complete IELTS Speaking test with all 3 parts. Be creative and vary topics each time.
@@ -100,61 +75,48 @@ def generate_speaking_questions() -> dict:
 
 def get_transcript(file) -> str:
     """
-    Takes a Django InMemoryUploadedFile or TemporaryUploadedFile (audio),
-    uploads it to Gemini Files API, generates a clean transcript, and
-    returns the transcript as a plain string.
+    Converts audio file to base64 and gets transcript via OpenRouter.
     """
-    # Determine MIME type from file name
     name = getattr(file, 'name', 'audio.mp3')
     ext = name.rsplit('.', 1)[-1].lower() if '.' in name else 'mp3'
-    mime_map = {
-        'mp3':  'audio/mpeg',
-        'mp4':  'audio/mp4',
-        'wav':  'audio/wav',
-        'ogg':  'audio/ogg',
-        'webm': 'audio/webm',
-        'flac': 'audio/flac',
-        'm4a':  'audio/mp4',
-        'aac':  'audio/aac',
-    }
-    mime_type = mime_map.get(ext, 'audio/mpeg')
-
-    # Write the in-memory/temp file to a real temp file so Gemini can upload it
-    suffix = f'.{ext}'
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        for chunk in file.chunks():
-            tmp.write(chunk)
-        tmp_path = tmp.name
+    
+    # Read file and encode to base64
+    audio_data = file.read()
+    base64_audio = base64.b64encode(audio_data).decode('utf-8')
+    
+    mime_type = f"audio/{ext}"
+    if ext == 'mp3': mime_type = "audio/mpeg"
 
     try:
-        # Upload audio to Gemini Files API
-        uploaded_file = client.files.upload(
-            file=tmp_path,
-            config=types.UploadFileConfig(mime_type=mime_type),
+        client = get_client()
+        response = client.chat.completions.create(
+            model="google/gemini-2.0-flash-001",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text", 
+                            "text": (
+                                "Please transcribe the spoken words in this audio file accurately and completely. "
+                                "Output ONLY the verbatim transcript — no timestamps, no speaker labels, no comments. "
+                                "Preserve punctuation naturally as spoken."
+                            )
+                        },
+                        {
+                            "type": "image_url", # OpenRouter uses image_url for multimodal content
+                            "image_url": {
+                                "url": f"data:{mime_type};base64,{base64_audio}"
+                            }
+                        }
+                    ]
+                }
+            ]
         )
-
-        # Generate transcript with a precise prompt
-        response = client.models.generate_content(
-            model='gemini-2.0-flash',
-            contents=[
-                uploaded_file,
-                (
-                    "Please transcribe the spoken words in this audio file accurately and completely. "
-                    "Output ONLY the verbatim transcript — no timestamps, no speaker labels, no comments, "
-                    "no formatting annotations. Preserve punctuation naturally as spoken."
-                ),
-            ],
-        )
-
-        # Clean up remote file
-        client.files.delete(name=uploaded_file.name)
-
-        return response.text.strip()
-
-    finally:
-        # Always remove the local temp file
-        if os.path.exists(tmp_path):
-            os.remove(tmp_path)
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"Transcription error: {e}")
+        return "Could not generate transcript."
 
 
 
