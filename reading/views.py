@@ -27,18 +27,12 @@ class CreatePassageQuestionAnswerView(generics.ListCreateAPIView):
 
 class ReadingPassageListView(views.APIView):
     def get(self, request):
-        set_id, queryset = get_reading_passage_queryset()
-
-        # Pass the set_id to the serializer via context
-        serializer = ReadingPassageListSerializer(
-            queryset, 
-            many=True, 
-        )
+        question_set = create_question_set()
+        serializer = QuestionSetSerializer(question_set)
         
         return Response({
             'success': True,
-            'message': 'Reading passages fetched successfully',
-            'set': set_id,
+            'message': 'Reading test session created successfully',
             'data': serializer.data
         })
 

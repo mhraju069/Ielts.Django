@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.db import transaction
-from .models import ReadingPassage, ReadingQuestion
+from .models import ReadingPassage, ReadingQuestion, QuestionSet
 
 
 
@@ -49,3 +49,12 @@ class ReadingPassageListSerializer(serializers.ModelSerializer):
     class Meta:
         model = ReadingPassage
         exclude = ['created_at', 'updated_at']
+
+
+
+class QuestionSetSerializer(serializers.ModelSerializer):
+    passages = ReadingPassageListSerializer(many=True, read_only=True)
+    
+    class Meta:
+        model = QuestionSet
+        fields = ['id', 'passages', 'start', 'duration']

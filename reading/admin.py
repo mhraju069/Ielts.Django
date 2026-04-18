@@ -7,7 +7,6 @@ from unfold.admin import ModelAdmin
 @admin.register(ReadingPassage)
 class ReadingPassageAdmin(ModelAdmin):
     list_display = ('title', 'level', 'created_at', 'updated_at')
-    readonly_fields = ('created_at', 'updated_at')
     search_fields = ('title', 'content')
     list_filter = ('level',)
 
@@ -22,8 +21,7 @@ class ReadingQuestionAdmin(ModelAdmin):
 
 @admin.register(QuestionSet)
 class QuestionSetAdmin(ModelAdmin):
-    list_display = ('id', 'created_at', 'updated_at')
-    readonly_fields = ('id', 'passages', 'answers', 'created_at', 'updated_at')
+    readonly_fields = ('id', 'passages', 'answers')
     autocomplete_fields = ('passages',)
 
 
