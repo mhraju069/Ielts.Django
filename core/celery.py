@@ -6,7 +6,7 @@ app.autodiscover_tasks(['core'])
 
 app.conf.beat_schedule = {
     'clean-pending-payments': {
-        'task': 'core.task.clean_pending_payments',
+        'task': 'core.tasks.clean_pending_payments',
         'schedule': 3600,  # 1 hour
     },
 }
