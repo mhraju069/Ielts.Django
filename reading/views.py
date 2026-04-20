@@ -5,7 +5,7 @@ from .models import *
 from .serializers import *
 from .utils import *
 from rest_framework.permissions import IsAuthenticated
-
+from others.models import Task
 # Create your views here.
 
 
@@ -26,15 +26,26 @@ class CreatePassageQuestionAnswerView(generics.ListCreateAPIView):
 
 
 class ReadingPassageListView(views.APIView):
+    permission_classes = [IsAuthenticated]
     def get(self, request):
-        question_set = create_question_set()
-        serializer = QuestionSetSerializer(question_set)
-        
-        return Response({
-            'success': True,
-            'message': 'Reading test session created successfully',
-            'data': serializer.data
-        })
+        try:
+            task = Task.objects.get(user=request.user, module='reading', completed=False)
+            question_set = QuestionSet.objects.get(id=task.question)
+            serializer = QuestionSetSerializer(question_set, context={'task': task})
+            return Response({
+                'success': True,
+                'message': 'Reading test session created successfully',
+                'data': serializer.data
+            })
+        except Task.DoesNotExist:
+            question_set = create_question_set()
+            serializer = QuestionSetSerializer(question_set)
+            Task.objects.create(user=request.user, module='reading', question=question_set.id, completed=False)
+            return Response({
+                'success': True,
+                'message': 'Reading test session created successfully',
+                'data': serializer.data
+            })
 
 
 
@@ -52,17 +63,35 @@ class ReadingQuestionAnswerSubmitView(views.APIView):
         if not set_id or not answers:
             return Response({
                 'success': False,
-                'message': 'Set ID and answers are required',
+                'log': 'Set ID and answers are required',
                 'data': None
             }, status=status.HTTP_400_BAD_REQUEST)
 
         if not isinstance(answers, (list, dict)):
             return Response({
                 'success': False,
-                'message': 'Answers must be a dict or list',
+                'log': 'Answers must be a dict or list',
                 'data': None
             }, status=status.HTTP_400_BAD_REQUEST)
 
+        try:
+            task = Task.objects.get(user=request.user, module='reading', question=set_id)
+
+            if task.completed:
+                return Response({
+                    'success': False,
+                    'log': 'Test already completed',
+                    'data': None
+                }, status=status.HTTP_400_BAD_REQUEST)
+            task.completed = True
+            task.save()
+
+        except Task.DoesNotExist:
+            return Response({
+                'success': False,
+                'log': 'Test not found',
+                'data': None
+            }, status=status.HTTP_404_NOT_FOUND)
 
         if isinstance(answers, list):
             merged = {}
@@ -75,7 +104,7 @@ class ReadingQuestionAnswerSubmitView(views.APIView):
         if not success:
             return Response({
                 'success': False,
-                'message': result if result else 'Failed to save reading answers',
+                'log': result if result else 'Failed to save reading answers',
                 'data': None
             }, status=status.HTTP_400_BAD_REQUEST)
 
@@ -86,7 +115,7 @@ class ReadingQuestionAnswerSubmitView(views.APIView):
 
         return Response({
             'success': True,
-            'message': 'Reading answers submitted successfully',
+            'log': 'Reading answers submitted successfully',
             'data': data
         })
         

@@ -54,7 +54,21 @@ class ReadingPassageListSerializer(serializers.ModelSerializer):
 
 class QuestionSetSerializer(serializers.ModelSerializer):
     passages = ReadingPassageListSerializer(many=True, read_only=True)
+    duration = serializers.SerializerMethodField()
     
     class Meta:
         model = QuestionSet
         fields = ['id', 'passages', 'start', 'duration']
+
+    def get_duration(self, obj):
+        try:
+            time = self.context['task'].remaining_time()
+            total_seconds = int(time.total_seconds())
+            if total_seconds <= 0:
+                return "00:00:00"
+        except:
+            total_seconds = int(obj.duration.total_seconds())
+            
+        hours, remainder = divmod(total_seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"

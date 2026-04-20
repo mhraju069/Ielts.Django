@@ -17,7 +17,7 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 1048576
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',')
 STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET')
 CORS_ALLOW_HEADERS = list(default_headers) + ['ngrok-skip-browser-warning',]
-CORS_ALLOW_ORIGINS = os.getenv('CORS_ALLOW_ORIGINS', 'http://localhost:8000,http://localhost:3000,http://localhost:5173,http://127.0.0.1:5173').split(',')
+CORS_ALLOW_ALL_ORIGINS = True # Enable all for dev
 CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', 'http://localhost:8000,http://localhost:3000,http://localhost:5173,http://127.0.0.1:5173').split(',')
 
 INSTALLED_APPS = [
