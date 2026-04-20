@@ -4,28 +4,65 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from .models import *
 from .utils import generate_speaking_questions, get_transcript, get_result
 from django.db import transaction
-from others.models import Results
+from others.models import Results, Task
 from rest_framework.permissions import IsAuthenticated
 
 
 
 class GenerateSpeakingSessionView(views.APIView):
+    permission_classes = [IsAuthenticated]
+    
     def get(self, request):
         try:
-            questions = generate_speaking_questions()
-
-            session = QuestionSet.objects.create(questions=questions)
+            task = Task.objects.get(user=request.user, module='speaking', completed=False)
+            session = QuestionSet.objects.get(id=task.question)
+            time = task.remaining_time()
+            total_seconds = int(time.total_seconds())
+            if total_seconds <= 0:
+                duration_str = "00:00:00"
+            else:
+                hours, remainder = divmod(total_seconds, 3600)
+                minutes, seconds = divmod(remainder, 60)
+                duration_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
             return Response({
                 'status': True,
                 'session_id': str(session.id),
-                **questions,
+                **session.questions,
+                'duration': duration_str,
             })
-        except Exception as e:
-            return Response(
-                {'status': False, 'error': str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        except Task.DoesNotExist:
+            try:
+                questions = generate_speaking_questions()
+
+                session = QuestionSet.objects.create(questions=questions)
+                
+                Task.objects.create(user=request.user, module='speaking', question=session.id, completed=False)
+
+                return Response({
+                    'status': True,
+                    'session_id': str(session.id),
+                    **questions,
+                    'duration': "00:14:00",  # default speaking time
+                })
+            except Exception as e:
+                return Response(
+                    {'status': False, 'error': str(e)},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+    # def get_remaining_time(self, request):
+    #     try:
+    #         task = Task.objects.get(user=request.user, module='speaking', completed=False)
+    #         session = QuestionSet.objects.get(id=task.question)
+    #         return Response({
+    #             'status': True,
+    #             'remaining_time': 14,
+    #         })
+    #     except Task.DoesNotExist:
+    #         return Response(
+    #             {'status': False, 'error': 'Speaking test session not found'},
+    #             status=status.HTTP_404_NOT_FOUND,
+    #         )
 
 
 
@@ -75,6 +112,21 @@ class SpeakingResultView(views.APIView):
         except QuestionSet.DoesNotExist:
             return Response(
                 {'status': False, 'error': 'Invalid or expired session_id'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        try:
+            task = Task.objects.get(user=request.user, module='speaking', question=session_id)
+            if task.completed:
+                return Response(
+                    {'status': False, 'error': 'Speaking test already completed'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            task.completed = True
+            task.save()
+        except Task.DoesNotExist:
+            return Response(
+                {'status': False, 'error': 'Speaking task session not found'},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
