@@ -4,7 +4,7 @@ from .utils import *
 from rest_framework import generics, status, views
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from others.models import Results
+from others.models import Results, Task
 
 
 
@@ -38,23 +38,35 @@ class GetWritingTaskView(views.APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        queryset = WritingQuestion.objects.all()
-        task1 = queryset.filter(level=1).order_by('?').first()
-        task2 = queryset.filter(level=2).order_by('?').first()
-        
-        questions = [q for q in [task1, task2] if q is not None]
-        
-        # Create a session (WritingTask)
-        session = WritingTask.objects.create()
-        session.question.set(questions)
-        
-        serializer = WritingTaskSerializer(session, context={'request': request})
-        
-        return Response({
-            "status": True,
-            "message": "Writing task session created successfully",
-            "data": serializer.data
-        }, status=status.HTTP_200_OK)
+        try:
+            task = Task.objects.get(user=request.user, module='writing', completed=False)
+            session = WritingTask.objects.get(id=task.question)
+            serializer = WritingTaskSerializer(session, context={'request': request, 'task': task})
+            return Response({
+                "status": True,
+                "message": "Writing task session retrieved successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+        except Task.DoesNotExist:
+            queryset = WritingQuestion.objects.all()
+            task1 = queryset.filter(level=1).order_by('?').first()
+            task2 = queryset.filter(level=2).order_by('?').first()
+            
+            questions = [q for q in [task1, task2] if q is not None]
+            
+            # Create a session (WritingTask)
+            session = WritingTask.objects.create()
+            session.question.set(questions)
+
+            task = Task.objects.create(user=request.user, module='writing', question=session.id, completed=False)
+
+            serializer = WritingTaskSerializer(session, context={'request': request, 'task': task})
+            
+            return Response({
+                "status": True,
+                "message": "Writing task session created successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
 
 
 
@@ -84,7 +96,9 @@ class WritingResultCreateView(views.APIView):
                 {"status": False, "message": "Writing session not found"},
                 status=status.HTTP_404_NOT_FOUND
             )
-
+        
+        Task.objects.filter(user=request.user, question=session_id, module="writing").update(completed=True)
+        
         result = get_result(answers, session, request.user)
 
         if not result:

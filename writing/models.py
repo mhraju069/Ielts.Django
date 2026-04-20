@@ -29,4 +29,4 @@ class WritingTask(models.Model):
         return f"Task {self.id}"
     
     def is_ended(self):
-        return timezone.now() > (self.start + self.duration)
+        return timezone.now() > (self.start + self.duration + timedelta(minutes=3))
