@@ -51,21 +51,34 @@ class SignInSerializer(serializers.Serializer):
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
+    old_password = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    password = serializers.CharField(write_only=True, required=False, allow_blank=True)
     
     class Meta:
         model = User
         exclude = ['block', 'is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions', 'date_joined']
         read_only_fields = ['id', 'email', 'role']
-        extra_kwargs = {'password': {'write_only': True}}
+        extra_kwargs = {
+            'password': {'write_only': True, 'required': False}
+        }
 
     def update(self, instance, validated_data):
+        # Update name and image if provided
         instance.name = validated_data.get('name', instance.name)
         instance.image = validated_data.get('image', instance.image)
 
-        if validated_data.get('password'):
-            if not instance.check_password(validated_data['old_password']):
-                raise serializers.ValidationError("Old password does not match.")
-            instance.set_password(validated_data['password'])
+        # Handle password update
+        old_password = validated_data.get('old_password')
+        new_password = validated_data.get('password')
+
+        if new_password:
+            if not old_password:
+                raise serializers.ValidationError({"old_password": "Current password is required to set a new password."})
+            
+            if not instance.check_password(old_password):
+                raise serializers.ValidationError({"old_password": "Old password does not match."})
+            
+            instance.set_password(new_password)
 
         instance.save()
         return instance

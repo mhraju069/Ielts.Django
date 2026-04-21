@@ -8,6 +8,9 @@ from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from rest_framework import generics, status,permissions
 from rest_framework_simplejwt.tokens import RefreshToken
+from subscriptions.serializers import *
+from payments.serializers import PaymentSerializer
+from payments.models import Payments
 
 # Create your views here.
 
@@ -131,10 +134,14 @@ class ResetPassword(APIView):
             return Response({"error": "User not found"}, status=404)
 
 
-class GetProfileView(generics.RetrieveUpdateDestroyAPIView):
+class GetProfileView(APIView):
     permission_classes = [permissions.IsAuthenticated]
-    serializer_class = UserProfileSerializer
     
-    def get_object(self):
-        return self.request.user
+    def get(self, request):
+        user = UserProfileSerializer(request.user,context={"request": request}).data
+        subscription = request.user.subscriptions.filter(active=True).first()
+        plan = PlanSerializers(subscription.plan).data if subscription else None
+        history = Payments.objects.filter(user=request.user).order_by('-created_at')
+        history = PaymentSerializer(history, many=True).data
+        return Response({"status": True, "log": user, "plan": plan, "history": history}, status=200)
 
