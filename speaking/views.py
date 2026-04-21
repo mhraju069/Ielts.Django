@@ -16,7 +16,7 @@ class GenerateSpeakingSessionView(views.APIView):
         try:
             task = Task.objects.get(user=request.user, module='speaking', completed=False)
             session = QuestionSet.objects.get(id=task.question)
-            time = task.remaining_time()
+            time = (session.start + session.duration) - timezone.now()
             total_seconds = int(time.total_seconds())
             if total_seconds <= 0:
                 duration_str = "00:00:00"
@@ -104,11 +104,6 @@ class SpeakingResultView(views.APIView):
                     SpeakingAnswer(session=question_set, part=3, audio=part3_audio),
                 ])
 
-            if question_set.is_ended():
-                return Response(
-                    {'status': False, 'error': 'Test has ended'},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
         except QuestionSet.DoesNotExist:
             return Response(
                 {'status': False, 'error': 'Invalid or expired session_id'},
