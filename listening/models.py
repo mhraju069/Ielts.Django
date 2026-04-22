@@ -4,7 +4,13 @@ from django.db import models
 
 
 class ListeningTask(models.Model):
+    audio = models.FileField(upload_to='audio/')
 
+    def __str__(self):
+        return f"Listening Test {self.id}"
+
+
+class Question(models.Model):
     QUESTION_TYPES = [
         ('mcq', 'Multiple Choice (A, B, C)'),
         ('matching', 'Matching Items'),
@@ -12,13 +18,6 @@ class ListeningTask(models.Model):
     ]
     
     type = models.CharField(max_length=20, choices=QUESTION_TYPES)
-    audio = models.FileField(upload_to='audio/')
-
-    def __str__(self):
-        return f"{self.type}"
-
-
-class Question(models.Model):
     task = models.ForeignKey(ListeningTask, on_delete=models.CASCADE, related_name='questions')
     question = models.JSONField(blank=True, null=True)
     answer = models.JSONField(blank=True, null=True)

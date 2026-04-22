@@ -59,9 +59,6 @@ class QuestionSet(models.Model):
 
     def __str__(self):
         return f"Question Set {self.id}"
-    
-    def is_ended(self):
-        return timezone.now() > (self.start + self.duration + timedelta(minutes=3))
 
     class Meta:
         verbose_name = 'Question Set'

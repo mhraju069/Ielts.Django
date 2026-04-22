@@ -232,8 +232,6 @@ def save_result(set_id, answers, user):
     except QuestionSet.DoesNotExist:
         return None, "Question set not found"
     try:
-        if question_set.is_ended():
-            return False, "Exam time already ended."
         
         title = Results.objects.filter(user=user, type='reading').count() + 1
         result = Results.objects.create(

@@ -100,11 +100,7 @@ class SpeakingResultView(views.APIView):
 
         try:
             task = Task.objects.get(user=request.user, module='speaking', question=session_id)
-            if task.completed:
-                return Response(
-                    {'status': False, 'error': 'Speaking test already completed'},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+
             task.completed = True
             task.save()
         except Task.DoesNotExist:

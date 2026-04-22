@@ -88,11 +88,7 @@ class WritingResultCreateView(views.APIView):
 
         try:
             session = WritingTask.objects.get(id=session_id)
-            if session.is_ended():
-                return Response(
-                    {"status": False, "message": "This writing test has already ended."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+
         except WritingTask.DoesNotExist:
             return Response(
                 {"status": False, "message": "Writing session not found"},

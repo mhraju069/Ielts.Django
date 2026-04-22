@@ -14,9 +14,6 @@ class QuestionSet(models.Model):
     def __str__(self):
         return str(self.id)
 
-    def is_ended(self):
-        return timezone.now() > (self.start + self.duration)
-
     class Meta:
         verbose_name = 'Question Set'
         verbose_name_plural = 'Question Sets'

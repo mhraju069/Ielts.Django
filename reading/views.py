@@ -77,12 +77,6 @@ class ReadingQuestionAnswerSubmitView(views.APIView):
         try:
             task = Task.objects.get(user=request.user, module='reading', question=set_id)
 
-            if task.completed:
-                return Response({
-                    'success': False,
-                    'log': 'Test already completed',
-                    'data': None
-                }, status=status.HTTP_400_BAD_REQUEST)
             task.completed = True
             task.save()
 
