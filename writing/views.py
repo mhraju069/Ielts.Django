@@ -83,12 +83,14 @@ class WritingResultCreateView(views.APIView):
                 {"status": False, "message": "Answers and task_id (session ID) are required"},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        
+        Task.objects.filter(user=request.user, question=session_id, module="writing").update(completed=True)
 
         try:
             session = WritingTask.objects.get(id=session_id)
             if session.is_ended():
                 return Response(
-                    {"status": False, "message": "Writing session has already ended"},
+                    {"status": False, "message": "This writing test has already ended."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
         except WritingTask.DoesNotExist:
@@ -96,9 +98,7 @@ class WritingResultCreateView(views.APIView):
                 {"status": False, "message": "Writing session not found"},
                 status=status.HTTP_404_NOT_FOUND
             )
-        
-        Task.objects.filter(user=request.user, question=session_id, module="writing").update(completed=True)
-        
+                
         result = get_result(answers, session, request.user)
 
         if not result:

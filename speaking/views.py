@@ -50,19 +50,7 @@ class GenerateSpeakingSessionView(views.APIView):
                     {'status': False, 'error': str(e)},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 )
-    # def get_remaining_time(self, request):
-    #     try:
-    #         task = Task.objects.get(user=request.user, module='speaking', completed=False)
-    #         session = QuestionSet.objects.get(id=task.question)
-    #         return Response({
-    #             'status': True,
-    #             'remaining_time': 14,
-    #         })
-    #     except Task.DoesNotExist:
-    #         return Response(
-    #             {'status': False, 'error': 'Speaking test session not found'},
-    #             status=status.HTTP_404_NOT_FOUND,
-    #         )
+
 
 
 
@@ -161,11 +149,11 @@ class SpeakingResultView(views.APIView):
         count = Results.objects.filter(user=request.user, type='speaking').count() + 1
         Results.objects.create(
             user      = request.user,
-            name      = f"Speaking Test {count}",
+            name      = f"Results of Speaking Test {count}",
             score     = str(result.get('overall_band_score', '0.0')),
             type      = 'speaking',
-            questions = questions, # The evaluation prompt's questions
-            answers   = result     # The full AI feedback and transcripts
+            questions = questions,
+            answers   = result,
         )
 
         return Response({

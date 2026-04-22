@@ -237,7 +237,7 @@ def save_result(set_id, answers, user):
         
         title = Results.objects.filter(user=user, type='reading').count() + 1
         result = Results.objects.create(
-            name = f"Result of Reading Test {title}",
+            name = f"Results of Reading Test {title}",
             user=user,
             answers=answers,
             type = 'reading',

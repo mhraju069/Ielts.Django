@@ -210,7 +210,7 @@ Return ONLY valid JSON with this exact structure (no markdown, no explanation ou
 
     Results.objects.create(
         user      = user,
-        name      = f"Writing Test {count}",
+        name      = f"Results of Writing Test {count}",
         score     = str(score_val),
         answers   = feedback,
         type      = "writing",

@@ -20,8 +20,14 @@ RUN pip install -r requirements.txt
 # Copy project
 COPY . .
 
+# Create a non-root user
+RUN addgroup --system celerygroup && adduser --system --group celeryuser
+
 # Create folder for static files
 RUN mkdir -p /app/staticfiles
+
+# Give ownership to the new user
+RUN chown -R celeryuser:celerygroup /app
 
 # Collect static files
 RUN python manage.py collectstatic --noinput
