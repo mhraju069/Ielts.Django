@@ -38,6 +38,15 @@ class GetWritingTaskView(views.APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        count = request.user.results.filter(type='writing').count()
+        plan = request.user.subscriptions.first()
+        
+        if plan and plan.plan.name == "free":
+            if count >= plan.plan.test_limit:
+                return Response({
+                    "status": False,
+                    "message": f"You have completed {plan.plan.test_limit} free writing tasks. Please upgrade your plan to continue."
+                }, status=status.HTTP_400_BAD_REQUEST)
         try:
             task = Task.objects.get(user=request.user, module='writing', completed=False)
             session = WritingTask.objects.get(id=task.question)

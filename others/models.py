@@ -62,6 +62,9 @@ class Results(models.Model):
 
     def __str__(self):
         return self.name
+    
+    def get_count(self, module=None):
+        return Results.objects.filter(user=self.user, type=module).count()
 
 
 
@@ -87,3 +90,15 @@ class ContactInfo(models.Model):
 
     def __str__(self):
         return self.email
+
+
+
+class FAQ(models.Model):
+    title = models.CharField(max_length=200)
+    description = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.title
+    

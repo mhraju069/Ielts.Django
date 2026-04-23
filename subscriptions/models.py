@@ -16,13 +16,15 @@ class Plan(models.Model):
     ]
     DURATION = [
         ("month", "Monthly"),
+        ("anual","Annual"),
         ("permanent", "Permanent"),
     ]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=20, choices=PLAN,unique=True)
     data = models.JSONField(default=list)
-    price = models.DecimalField(max_digits=10, decimal_places=2)
-    duration = models.CharField(max_length=20, choices=DURATION)
+    test_limit = models.IntegerField(default=None,help_text="Number of tests allowed for each module", blank=True, null=True)
+    price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    duration = models.CharField(max_length=20, choices=DURATION,default="permanent")
     
     
     def __str__(self):

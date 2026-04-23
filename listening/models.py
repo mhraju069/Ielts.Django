@@ -3,11 +3,18 @@ from django.db import models
 # Create your models here.
 
 
+import uuid
+from datetime import timedelta
+
 class ListeningTask(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    type = models.CharField(max_length=100, default="Listening Test")
     audio = models.FileField(upload_to='audio/')
+    start = models.DateTimeField(auto_now_add=True)
+    duration = models.DurationField(default=timedelta(minutes=40))
 
     def __str__(self):
-        return f"Listening Test {self.id}"
+        return f"{self.type} {self.id}"
 
 
 class Question(models.Model):

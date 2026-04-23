@@ -7,4 +7,6 @@ urlpatterns = [
     path('dashboard/', DashBoardView.as_view(), name='dashboard'),
     path('contact/', ContactView.as_view(), name='contact'),
     path('message/', MessagesView.as_view(), name='message'),
+    path('faq/', FAQView.as_view(), name='faq'),
+    path('leaderboard/', LeaderboardView.as_view(), name='leaderboard'),
 ]

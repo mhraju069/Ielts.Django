@@ -9,8 +9,7 @@ services:
     expose:
       - "8000"
     depends_on:
-    - redis
-      # - db
+      - redis # - db
     environment:
       - DJANGO_SETTINGS_MODULE=core.settings
     env_file:
@@ -80,7 +79,5 @@ services:
     env_file:
       - .env
     restart: always
-
-
   # volumes:
   #   postgres_data:

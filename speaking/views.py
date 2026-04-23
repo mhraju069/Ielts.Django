@@ -6,13 +6,23 @@ from .utils import generate_speaking_questions, get_transcript, get_result
 from django.db import transaction
 from others.models import Results, Task
 from rest_framework.permissions import IsAuthenticated
-
+from datetime import timedelta
 
 
 class GenerateSpeakingSessionView(views.APIView):
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
+        count = request.user.results.filter(type='speaking').count()
+        plan = request.user.subscriptions.first()
+        
+        if plan and plan.plan.name == "free":
+            if count >= plan.plan.test_limit:
+                return Response({
+                    "status": False,
+                    "message": f"You have completed {plan.plan.test_limit} free speaking tasks. Please upgrade your plan to continue."
+                }, status=status.HTTP_400_BAD_REQUEST)
+
         try:
             task = Task.objects.get(user=request.user, module='speaking', completed=False)
             session = QuestionSet.objects.get(id=task.question)

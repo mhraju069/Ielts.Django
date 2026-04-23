@@ -1,10 +1,13 @@
 from django.shortcuts import render
 from .models import *
 from .serializers import *
+from django.db.models import Max, FloatField
+from django.db.models.functions import Cast
 from rest_framework import generics, status, permissions, views
 from rest_framework.response import Response
 from django.utils import timezone
 from datetime import timedelta
+
 
 # Create your views here.
 
@@ -168,3 +171,60 @@ class ContactView(views.APIView):
             }
         })
 
+
+
+class FAQView(views.APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        data = FAQ.objects.all()
+        return Response({
+            "status": True,
+            "log": [
+                {
+                    "title": faq.title,
+                    "description": faq.description,
+                } for faq in data
+            ]
+        })
+
+
+
+class LeaderboardView(views.APIView):
+
+    def get(self, request):
+        data = Results.objects.all()
+        # Cast score to FloatField for accurate numeric Max and sorting
+        top6 = (data.values('user').annotate(
+            max_score=Max(Cast('score', output_field=FloatField()))
+        ).order_by('-max_score')[:6])
+        
+        results = []
+        review = [
+                    "I've been practicing IELTS on this platform for a few weeks now, and I can really see improvement in my skills. The exercises are clear and helpful, and I like how I can track my progress.",
+                    "This website has made my IELTS preparation much easier. The practice tests feel realistic, and the feedback helps me understand where I need to improve.",
+                    "I enjoy using this platform for my IELTS practice. The lessons are well-structured, and it keeps me motivated to study regularly.",
+                    "Preparing for IELTS here has been a great experience. The interface is simple, and I can practice anytime without feeling overwhelmed.",
+                    "This platform is very useful for IELTS students like me. I especially like the variety of questions and how it helps build my confidence.",
+                    "I've tried other resources, but this website stands out. It’s easy to use, and I feel more prepared for my IELTS exam every day."
+                    ]
+
+        for index, i in enumerate(top6):
+            user = User.objects.get(id=i['user'])
+            # Order by created_at to correctly identify first and last attempts
+            user_results = data.filter(user=user).order_by('created_at')
+            cur = user_results.last()
+            old = user_results.first()
+            results.append({
+                "name": user.name or user.email,
+                "image": request.build_absolute_uri(user.image.url) if user.image else None,
+                "score_before": float(old.score) if old else 0.0,
+                "score_after": float(cur.score) if cur else 0.0,
+                "time": cur.created_at if cur else None,
+                "review": review[index % len(review)]
+            })
+        
+        return Response({
+            "status": True,
+            "log": results
+        })

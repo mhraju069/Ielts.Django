@@ -28,6 +28,15 @@ class CreatePassageQuestionAnswerView(generics.ListCreateAPIView):
 class ReadingPassageListView(views.APIView):
     permission_classes = [IsAuthenticated]
     def get(self, request):
+        count = request.user.results.filter(type='reading').count()
+        plan = request.user.subscriptions.first()
+        
+        if plan and plan.plan.name == "free":
+            if count >= plan.plan.test_limit:
+                return Response({
+                    "status": False,
+                    "message": f"You have completed {plan.plan.test_limit} free reading tasks. Please upgrade your plan to continue."
+                }, status=status.HTTP_400_BAD_REQUEST)
         try:
             task = Task.objects.get(user=request.user, module='reading', completed=False)
             question_set = QuestionSet.objects.get(id=task.question)
