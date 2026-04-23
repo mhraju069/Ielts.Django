@@ -47,10 +47,13 @@ class Subscriptions(models.Model):
 
         plan_obj = self.plan
 
-        if not self.end and plan_obj:
-
+        if plan_obj:
             if plan_obj.duration == 'month':
                 self.end = self.start + relativedelta(months=1)
+            elif plan_obj.duration == 'anual':
+                self.end = self.start + relativedelta(years=1)
+            elif plan_obj.duration == 'permanent':
+                self.end = None
         
         super().save(*args, **kwargs)
 

@@ -8,7 +8,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from .models import Payments
-from subscriptions.models import Plan
+from subscriptions.models import Plan, Subscriptions
 from .serializers import PaymentSerializer
 from .helper import create_checkout_session
 
@@ -138,6 +138,10 @@ class StripeWebhookView(APIView):
                     payment = Payments.objects.get(id=payment_id)
                     print(f"Update Start: Payment {payment.id}")
                     
+                    if payment.status == 'paid':
+                        print(f"Skipping: Payment {payment.id} already processed.")
+                        return HttpResponse(status=status.HTTP_200_OK)
+
                     payment.status = 'paid'
                     payment.tnxid = transaction_id
                     
@@ -181,6 +185,17 @@ class StripeWebhookView(APIView):
 
                     payment.invoice = invoice_url
                     payment.save()
+                    
+                    # Deactivate existing active subscriptions for this user
+                    Subscriptions.objects.filter(user=payment.user, active=True).update(active=False)
+                    
+                    # Create/Activate new subscription
+                    Subscriptions.objects.create(
+                        user=payment.user,
+                        plan=payment.plan,
+                        active=True
+                    )
+                    print(f"Subscription activated: User {payment.user.email} | Plan {payment.plan.name}")
                     
                 except Exception as e:
                     print(f"Database update error: {str(e)}")
