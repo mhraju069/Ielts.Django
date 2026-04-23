@@ -228,3 +228,150 @@ class LeaderboardView(views.APIView):
             "status": True,
             "log": results
         })
+
+
+class DetailedFeedbackView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, result_id):
+        try:
+            result = Results.objects.get(id=result_id, user=request.user)
+            return Response({
+                "status": True,
+                "data": result.feedback,
+                "name": result.name,
+                "type": result.type,
+                "created_at": result.created_at
+            })
+        except Results.DoesNotExist:
+            return Response({
+                "status": False,
+                "error": "Result not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+
+
+class DownloadReportView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, result_id):
+        try:
+            result = Results.objects.get(id=result_id, user=request.user)
+            feedback = result.feedback or {}
+            
+            context = {
+                "result": result,
+                "feedback": feedback,
+                "criteria": feedback.get("criteria", {}),
+                "strengths": feedback.get("strengths", []),
+                "improvements": feedback.get("areas_for_improvement", []),
+                "summary": feedback.get("performance_breakdown", ""),
+            }
+            
+            # Returns a styled HTML that the user can "Save as PDF" from browser.
+            return render(request, 'report_template.html', context)
+            
+        except Results.DoesNotExist:
+            return Response({"error": "Result not found"}, status=404)
+
+
+import os
+import json
+from openai import OpenAI
+
+class AIFeedbackView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, result_id):
+        try:
+            result = Results.objects.get(id=result_id, user=request.user)
+            
+            # Use cached detailed analysis if available
+            if result.feedback and "detailed_analysis" in result.feedback:
+                return Response({
+                    "status": True,
+                    "data": result.feedback["detailed_analysis"]
+                })
+
+            # Prepare data for AI
+            test_data = {
+                "type": result.type,
+                "score": result.score,
+                "questions": result.questions,
+                "user_answers": result.answers,
+            }
+
+            prompt = f"""
+            You are an expert IELTS examiner. Analyze the following student test result and provide a deep-dive performance analysis.
+            Test Type: {result.type}
+            Overall Score/Band: {result.score}
+
+            For each question (especially incorrect ones):
+            1. Identify the question number/identifier.
+            2. Evaluate the student's answer.
+            3. If wrong, explain precisely what led to the mistake (e.g., misinterpretation of a keyword, missing a detail in the passage, grammatical error).
+            4. Provide the correct answer and the rationale behind it.
+            5. Give a targeted "Examiner Tip" on how to avoid this specific error in the future.
+
+            Student Data:
+            {json.dumps(test_data, indent=2)}
+
+            Return the response as a structured JSON object with this exact structure:
+            {{
+                "overall_summary": "A 2-3 sentence summary of overall performance from an examiner's perspective.",
+                "analysis": [
+                    {{
+                        "question": "Question text or number",
+                        "status": "correct/incorrect",
+                        "student_answer": "...",
+                        "correct_answer": "...",
+                        "explanation": "Detailed explanation of the mistake or why it was correct.",
+                        "examiner_tip": "Specific advice to improve."
+                    }}
+                ],
+                "action_plan": [
+                    "3-5 concrete steps the student should take to reach a higher band score."
+                ]
+            }}
+            """
+
+            # Call AI
+            api_key = os.getenv("OPENROUTER_API_KEY")
+            if not api_key:
+                return Response({
+                    "status": False,
+                    "error": "AI configuration missing"
+                }, status=500)
+
+            client = OpenAI(
+                base_url="https://openrouter.ai/api/v1",
+                api_key=api_key,
+            )
+            
+            response = client.chat.completions.create(
+                model="google/gemini-2.0-flash-001",
+                messages=[{"role": "user", "content": prompt}],
+                response_format={ "type": "json_object" }
+            )
+            
+            detailed_analysis = json.loads(response.choices[0].message.content)
+            
+            # Store it in the feedback field for future use
+            if not result.feedback:
+                result.feedback = {}
+            result.feedback["detailed_analysis"] = detailed_analysis
+            result.save()
+
+            return Response({
+                "status": True,
+                "data": detailed_analysis
+            })
+
+        except Results.DoesNotExist:
+            return Response({"error": "Result not found"}, status=404)
+        except Exception as e:
+            print(f"Error in AIFeedbackView: {e}")
+            return Response({
+                "status": False,
+                "error": "Failed to generate detailed feedback. Please try again later."
+            }, status=500)

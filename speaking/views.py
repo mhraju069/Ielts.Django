@@ -5,6 +5,7 @@ from .models import *
 from .utils import generate_speaking_questions, get_transcript, get_result
 from django.db import transaction
 from others.models import Results, Task
+from subscriptions.models import Plan
 from rest_framework.permissions import IsAuthenticated
 from datetime import timedelta
 
@@ -14,13 +15,18 @@ class GenerateSpeakingSessionView(views.APIView):
     
     def get(self, request):
         count = request.user.results.filter(type='speaking').count()
-        plan = request.user.subscriptions.first()
+        plan = request.user.subscriptions.filter(active=True).first()
         
-        if plan and plan.plan.name == "free":
-            if count >= plan.plan.test_limit:
+        # If no active plan or free plan, apply limits
+        if not plan or plan.plan.name == "free":
+            # Get the free plan definition from the DB to get its test_limit
+            free_plan = plan.plan if plan else Plan.objects.filter(name="free").first()
+            limit = free_plan.test_limit if free_plan else 2 # default to 2 if something is missing
+            
+            if count >= limit:
                 return Response({
                     "status": False,
-                    "message": f"You have completed {plan.plan.test_limit} free speaking tasks. Please upgrade your plan to continue."
+                    "message": f"You have completed {limit} free speaking tasks. Please upgrade your plan to continue."
                 }, status=status.HTTP_400_BAD_REQUEST)
 
         try:
@@ -159,7 +165,8 @@ class SpeakingResultView(views.APIView):
             score     = str(result.get('overall_band_score', '0.0')),
             type      = 'speaking',
             questions = questions,
-            answers   = result,
+            answers   = transcripts,
+            feedback  = result,
         )
 
         return Response({

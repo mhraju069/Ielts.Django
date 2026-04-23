@@ -6,6 +6,7 @@ from .serializers import *
 from .utils import *
 from rest_framework.permissions import IsAuthenticated
 from others.models import Task
+from subscriptions.models import Plan
 # Create your views here.
 
 
@@ -29,13 +30,16 @@ class ReadingPassageListView(views.APIView):
     permission_classes = [IsAuthenticated]
     def get(self, request):
         count = request.user.results.filter(type='reading').count()
-        plan = request.user.subscriptions.first()
+        plan = request.user.subscriptions.filter(active=True).first()
         
-        if plan and plan.plan.name == "free":
-            if count >= plan.plan.test_limit:
+        if not plan or plan.plan.name == "free":
+            free_plan = plan.plan if plan else Plan.objects.filter(name="free").first()
+            limit = free_plan.test_limit if free_plan else 2 # default to 2 if something is missing
+            
+            if count >= limit:
                 return Response({
                     "status": False,
-                    "message": f"You have completed {plan.plan.test_limit} free reading tasks. Please upgrade your plan to continue."
+                    "message": f"You have completed {limit} free reading tasks. Please upgrade your plan to continue."
                 }, status=status.HTTP_400_BAD_REQUEST)
         try:
             task = Task.objects.get(user=request.user, module='reading', completed=False)
@@ -112,9 +116,10 @@ class ReadingQuestionAnswerSubmitView(views.APIView):
             }, status=status.HTTP_400_BAD_REQUEST)
 
         data = get_result(set_id, answers)
-
-        result.score = data.get('raw_score', result.score)
+        result.score = data.get('score', result.score)
+        result.feedback = data
         result.save()
+        data["id"] = result.id
 
         return Response({
             'success': True,

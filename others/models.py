@@ -57,6 +57,7 @@ class Results(models.Model):
     type = models.CharField(max_length=100, choices=RESULT_TYPES)
     questions = models.JSONField(blank=True, null=True)
     answers = models.JSONField(blank=True, null=True)
+    feedback = models.JSONField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

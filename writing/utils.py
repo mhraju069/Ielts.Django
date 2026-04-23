@@ -212,7 +212,8 @@ Return ONLY valid JSON with this exact structure (no markdown, no explanation ou
         user      = user,
         name      = f"Results of Writing Test {count}",
         score     = str(score_val),
-        answers   = feedback,
+        answers   = answers_for_db,
+        feedback  = feedback,
         type      = "writing",
         questions = tasks_data
     )

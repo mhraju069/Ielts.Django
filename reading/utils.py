@@ -249,7 +249,7 @@ def save_result(set_id, answers, user):
                 'title': passage.title,
                 'content': passage.content,
                 'level': passage.level,
-                'questions': list(passage.questions.values('id', 'question_number', 'question', 'question_type', 'options'))
+                'questions': list(passage.questions.values('id', 'question_number', 'question', 'question_type', 'options', 'answer'))
             }
             passages_list.append(p_data)
         

@@ -5,6 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 from .models import ListeningTask, Question
 from .serializers import ListeningTaskSerializer, QuestionSerializer
 from others.models import Task
+from subscriptions.models import Plan
 
 
 
@@ -29,13 +30,17 @@ class ListeningTaskDetailView(views.APIView):
 
     def get(self, request):
         count = request.user.results.filter(type='listening').count()
-        plan = request.user.subscriptions.first()
+        plan = request.user.subscriptions.filter(active=True).first()
         
-        if plan and plan.plan.name == "free":
-            if count >= plan.plan.test_limit:
+        if not plan or plan.plan.name == "free":
+            # Get the free plan definition from the DB to get its test_limit
+            free_plan = plan.plan if plan else Plan.objects.filter(name="free").first()
+            limit = free_plan.test_limit if free_plan else 2 # default to 2 if something is missing
+            
+            if count >= limit:
                 return Response({
                     "status": False,
-                    "message": f"You have completed {plan.plan.test_limit} free listening tasks. Please upgrade your plan to continue."
+                    "message": f"You have completed {limit} free listening tasks. Please upgrade your plan to continue."
                 }, status=status.HTTP_400_BAD_REQUEST)
 
         try:
