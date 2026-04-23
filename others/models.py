@@ -62,3 +62,28 @@ class Results(models.Model):
 
     def __str__(self):
         return self.name
+
+
+
+class Messages(models.Model):
+    name = models.CharField(max_length=100)
+    email = models.EmailField()
+    message = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.email + " " + self.message[:50]
+
+
+
+class ContactInfo(models.Model):
+    email = models.EmailField(default="ieltsrevice@example.com")
+    phone = models.CharField(max_length=100, default="+91 1234567890")
+    address = models.TextField(default="123,abc street")
+    support_timing = models.TextField(default="Mon-Fri 9am-5pm")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.email

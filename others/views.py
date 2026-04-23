@@ -120,3 +120,51 @@ class DashBoardView(views.APIView):
         
         return Response(data)
     
+
+
+
+class MessagesView(views.APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        data = request.data
+        name = data.get('name')
+        email = data.get('email')
+        message = data.get('message')
+
+        if not name or not email or not message:
+            return Response(
+                {'status': False, 'error': 'Missing fields'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        Messages.objects.create(
+            name=name,
+            email=email,
+            message=message,
+        )
+        
+        return Response({
+            "status": True,
+            "log": "Message sent successfully"
+        })
+
+
+
+
+
+class ContactView(views.APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        data = ContactInfo.objects.all().first()
+        return Response({
+            "status": True,
+            "data": {
+                "email": data.email or "",
+                "phone": data.phone or "",
+                "address": data.address or "",
+                "support_timing": data.support_timing or "",
+            }
+        })
+

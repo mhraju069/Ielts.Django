@@ -7,3 +7,5 @@ from unfold.admin import ModelAdmin
 admin.site.register(Blog,ModelAdmin)
 admin.site.register(Results,ModelAdmin)
 admin.site.register(Task,ModelAdmin)
+admin.site.register(Messages,ModelAdmin)
+admin.site.register(ContactInfo,ModelAdmin)
