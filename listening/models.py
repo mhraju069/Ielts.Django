@@ -8,13 +8,13 @@ from datetime import timedelta
 
 class ListeningTask(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    type = models.CharField(max_length=100, default="Listening Test")
-    audio = models.FileField(upload_to='audio/')
-    start = models.DateTimeField(auto_now_add=True)
+    audio = models.FileField(upload_to='audio/', null=True, blank=True)
     duration = models.DurationField(default=timedelta(minutes=40))
+    questions = models.JSONField(blank=True, null=True)
+    answers = models.JSONField(blank=True, null=True)
 
     def __str__(self):
-        return f"{self.type} {self.id}"
+        return f"Listening Task {self.id}"
 
 
 class Question(models.Model):
@@ -25,9 +25,9 @@ class Question(models.Model):
     ]
     
     type = models.CharField(max_length=20, choices=QUESTION_TYPES)
-    task = models.ForeignKey(ListeningTask, on_delete=models.CASCADE, related_name='questions')
+    task = models.ForeignKey(ListeningTask, on_delete=models.CASCADE, related_name='task_questions')
     question = models.JSONField(blank=True, null=True)
     answer = models.JSONField(blank=True, null=True)
 
     def __str__(self):
-        return f"{self.task.type} - {self.question[:50]}..."
+        return f"{self.type} {self.id}"

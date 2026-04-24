@@ -45,26 +45,88 @@ class ListeningTaskDetailView(views.APIView):
 
         try:
             task = Task.objects.get(user=request.user, module='listening', completed=False)
-            listening_task = ListeningTask.objects.get(id=task.question)
-            serializer = ListeningTaskSerializer(listening_task, context={'task': task})
-            return Response({
-                'success': True,
-                'message': 'Listening test session retrieved successfully',
-                'data': serializer.data
-            })
-        except Task.DoesNotExist:
-            listening_task = ListeningTask.objects.order_by('?').first()
-            if not listening_task:
+            try:
+                listening_task = ListeningTask.objects.get(id=task.question)
+                serializer = ListeningTaskSerializer(listening_task, context={'task': task, "request": request})
                 return Response({
-                    'success': False,
-                    'message': 'No listening tasks available',
-                    'data': None
-                }, status=status.HTTP_404_NOT_FOUND)
-                
-            task = Task.objects.create(user=request.user, module='listening', question=listening_task.id, completed=False)
-            serializer = ListeningTaskSerializer(listening_task, context={'task': task})
+                    'success': True,
+                    'message': 'Listening test session retrieved successfully',
+                    'data': serializer.data
+                })
+            except ListeningTask.DoesNotExist:
+                # If the underlying listening task was deleted, remove the stale task session
+                task.delete()
+        except Task.DoesNotExist:
+            pass
+
+        # If no active session exists (or one was just deleted), start a new one
+        listening_task = ListeningTask.objects.order_by('?').first()
+        if not listening_task:
             return Response({
-                'success': True,
-                'message': 'Listening test session created successfully',
-                'data': serializer.data
-            })
+                'success': False,
+                'message': 'No listening tasks available',
+                'data': None
+            }, status=status.HTTP_404_NOT_FOUND)
+            
+        task = Task.objects.create(user=request.user, module='listening', question=listening_task.id, completed=False)
+        serializer = ListeningTaskSerializer(listening_task, context={'task': task, "request": request})
+        return Response({
+            'success': True,
+            'message': 'Listening test session created successfully',
+            'data': serializer.data
+        })
+from .utils import save_result, get_result
+
+class ListeningQuestionAnswerSubmitView(views.APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        data = request.data
+        if isinstance(data, list) and len(data) > 0:
+            data = data[0]
+            
+        task_id = data.get('task_id')
+        answers = data.get('answers', [])
+
+        if not task_id or not answers:
+            return Response({
+                'success': False,
+                'message': 'Task ID and answers are required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            task_session = Task.objects.get(user=request.user, module='listening', question=task_id)
+            task_session.completed = True
+            task_session.save()
+        except Task.DoesNotExist:
+            return Response({
+                'success': False,
+                'message': 'Test session not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        if isinstance(answers, list):
+            merged = {}
+            for item in answers:
+                if isinstance(item, dict):
+                    merged.update(item)
+            answers = merged
+
+        success, result_obj = save_result(task_id, answers, request.user)
+        if not success:
+            return Response({
+                'success': False,
+                'message': result_obj or 'Failed to save listening answers'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        feedback_data = get_result(task_id, answers)
+        result_obj.score = str(feedback_data.get('score', result_obj.score))
+        result_obj.feedback = feedback_data
+        result_obj.save()
+
+        feedback_data["id"] = result_obj.id
+
+        return Response({
+            'success': True,
+            'message': 'Listening answers submitted successfully',
+            'data': feedback_data
+        })
