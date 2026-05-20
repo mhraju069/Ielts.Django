@@ -4,3 +4,4 @@ from unfold.admin import ModelAdmin
 # Register your models here.
 
 admin.site.register(WritingTask, ModelAdmin)
+admin.site.register(WritingQuestion, ModelAdmin)
