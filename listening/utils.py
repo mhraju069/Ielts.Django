@@ -34,6 +34,7 @@ def get_result(task_id, answers):
     for question in questions:
         q_data = question.question or {}
         q_num = str(q_data.get('question_number', ''))
+        q_text = q_data.get('text', q_data.get('question', 'Unknown Question'))
         correct_answer = question.answer
         raw_user_answer = answers.get(q_num)
 
@@ -67,6 +68,7 @@ def get_result(task_id, answers):
 
         per_question_detail.append({
             'question_number': q_num,
+            'question_text': q_text,
             'correct_answer': correct_answer,
             'user_answer': display_answer,
             'is_correct': is_correct,
@@ -98,7 +100,7 @@ def get_result(task_id, answers):
     for item in per_question_detail:
         status_str = "✓ Correct" if item['is_correct'] else "✗ Wrong"
         summary_lines.append(
-            f"  Q{item['question_number']}: {status_str} "
+            f"  Q{item['question_number']} ({item['question_text']}): {status_str} "
             f"(correct: {item['correct_answer']}, given: {item['user_answer']})"
         )
     performance_summary = "\n".join(summary_lines)
@@ -120,6 +122,7 @@ RULES — follow these strictly:
 1. Any question showing "[NO ANSWER PROVIDED]" means the student gave NO answer. Report it as unanswered. Do NOT invent or guess what the student might have written.
 2. Only base your feedback on what is literally shown above. Do not assume, hallucinate, or fill in missing answers.
 3. Scores must reflect the actual results above — do not inflate or deflate.
+4. Be very strict about accuracy. If many questions are wrong or unanswered, reflect this in the performance_breakdown as poor performance.
 
 Return ONLY valid JSON with this exact structure (no markdown, no explanation):
 

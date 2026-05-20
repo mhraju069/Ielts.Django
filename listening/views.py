@@ -6,6 +6,7 @@ from .models import ListeningTask, Question
 from .serializers import ListeningTaskSerializer, QuestionSerializer
 from others.models import Task
 from subscriptions.models import Plan
+from .utils import save_result, get_result
 
 
 
@@ -69,8 +70,13 @@ class ListeningTaskDetailView(views.APIView):
                 # If the underlying listening task was deleted, remove the stale task session
                 task.delete()
 
-        # If no active session exists (or one was just deleted), start a new one
-        listening_task = ListeningTask.objects.order_by('?').first()
+        # If no active session exists, start a new one (exclude already completed tasks)
+        completed_task_ids = Task.objects.filter(user=request.user, module='listening', completed=True).values_list('question', flat=True)
+        listening_task = ListeningTask.objects.exclude(id__in=completed_task_ids).order_by('?').first()
+        
+        # If all tasks are completed, pick any random task
+        if not listening_task:
+            listening_task = ListeningTask.objects.order_by('?').first()
         if not listening_task:
             return Response({
                 'success': False,
@@ -85,7 +91,8 @@ class ListeningTaskDetailView(views.APIView):
             'message': 'Listening test session created successfully',
             'data': serializer.data
         })
-from .utils import save_result, get_result
+
+
 
 class ListeningQuestionAnswerSubmitView(views.APIView):
     permission_classes = [IsAuthenticated]
@@ -122,6 +129,34 @@ class ListeningQuestionAnswerSubmitView(views.APIView):
 
         task_session.completed = True
         task_session.save()
+
+        # Check if already evaluated
+        from others.models import Results
+        from .models import ListeningTask
+        try:
+            task = ListeningTask.objects.get(id=task_id)
+            questions_list = []
+            for q in task.task_questions.all():
+                q_data = q.question or {}
+                questions_list.append({
+                    'id': q.id,
+                    'question_number': q_data.get('question_number'),
+                    'question': q_data.get('text'),
+                    'type': q.type,
+                    'options': q_data.get('options'),
+                    'answer': q.answer
+                })
+            
+            result = Results.objects.filter(user=request.user, type='listening', questions=questions_list).first()
+            if result:
+                return Response({
+                    'success': True,
+                    'message': 'Listening already evaluated',
+                    'data': result.feedback,
+                    'id': result.id
+                }, status=status.HTTP_200_OK)
+        except Exception as e:
+            print(f"Error checking existing listening result: {e}")
 
         if isinstance(answers, list):
             merged = {}

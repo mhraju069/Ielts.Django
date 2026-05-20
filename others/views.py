@@ -36,7 +36,7 @@ from .serializers import MockTaskSerializer
 from listening.utils import get_result as listening_eval
 from reading.utils import get_result as reading_eval
 from writing.utils import get_result as writing_eval
-from speaking.utils import get_result as speaking_eval, get_transcript
+from speaking.utils import get_result as speaking_eval, get_transcript, get_result_multimodal
 from concurrent.futures import ThreadPoolExecutor
 
 # Create your views here.
@@ -52,7 +52,7 @@ class BlogListView(generics.ListAPIView):
 
 class BlogDetailView(generics.RetrieveAPIView):
     permission_classes = [permissions.AllowAny]
-    serializer_class = BlogSerializer
+    serializer_class = BlogDetailsSerializer
     queryset = Blog.objects.all()
     lookup_field = 'id'
 
@@ -145,6 +145,8 @@ class DashBoardView(views.APIView):
                 {
                     "name" : res.name,
                     "score" : res.score,
+                    "result_id" : res.id,
+                    "type" : res.type,
                     "created_at" : res.created_at,
                     
                 } for res in results[:5]
@@ -347,28 +349,49 @@ class DownloadReportView(views.APIView):
 
             else:
                 # --- STANDARD SINGLE MODULE REPORT ---
-                summary = feedback.get('performance_breakdown', '')
+                summary = feedback.get('performance_breakdown') or feedback.get('feedback', '')
                 if summary:
                     story.append(Paragraph('Overall Summary', heading_style))
-                    story.append(Paragraph(summary, body_style))
+                    story.append(Paragraph(str(summary), body_style))
                     story.append(Spacer(1, 8))
 
+                # Handle Criteria
                 criteria = feedback.get('criteria', {})
+                if not criteria and result.type == 'speaking':
+                    criteria = {
+                        "Fluency & Coherence": feedback.get('fluency'),
+                        "Pronunciation": feedback.get('pronunciation'),
+                        "Lexical Resource": feedback.get('vocabulary'),
+                        "Grammatical Range": feedback.get('grammar')
+                    }
+
                 if criteria:
                     story.append(Paragraph('Score Breakdown', heading_style))
                     table_data = [['Criteria', 'Score']]
                     for key, val in criteria.items():
-                        table_data.append([key, str(val)])
-                    t = Table(table_data, colWidths=[12*cm, 4*cm])
-                    t.setStyle(TableStyle([
-                        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#4361ee')),
-                        ('TEXTCOLOR',  (0,0), (-1,0), colors.white),
-                        ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.HexColor('#f0f4ff'), colors.white]),
-                        ('GRID',       (0,0), (-1,-1), 0.5, colors.HexColor('#cccccc')),
-                        ('PADDING',    (0,0), (-1,-1), 6),
-                    ]))
-                    story.append(t)
-                    story.append(Spacer(1, 12))
+                        if val is not None:
+                            table_data.append([key, str(val)])
+                    
+                    if len(table_data) > 1:
+                        t = Table(table_data, colWidths=[12*cm, 4*cm])
+                        t.setStyle(TableStyle([
+                            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#4361ee')),
+                            ('TEXTCOLOR',  (0,0), (-1,0), colors.white),
+                            ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.HexColor('#f0f4ff'), colors.white]),
+                            ('GRID',       (0,0), (-1,-1), 0.5, colors.HexColor('#cccccc')),
+                            ('PADDING',    (0,0), (-1,-1), 6),
+                        ]))
+                        story.append(t)
+                        story.append(Spacer(1, 12))
+
+                # Special: Speaking Part Feedback
+                part_fb = feedback.get('part_feedback', {})
+                if part_fb:
+                    story.append(Paragraph('Part-by-Part Analysis', heading_style))
+                    for part_name, part_text in part_fb.items():
+                        story.append(Paragraph(part_name.capitalize(), subheading_style))
+                        story.append(Paragraph(str(part_text), body_style))
+                    story.append(Spacer(1, 8))
 
                 strengths = feedback.get('strengths', [])
                 if strengths:
@@ -377,7 +400,7 @@ class DownloadReportView(views.APIView):
                         story.append(Paragraph(f'• {s}', body_style))
                     story.append(Spacer(1, 8))
 
-                improvements = feedback.get('areas_for_improvement', [])
+                improvements = feedback.get('areas_for_improvement') or feedback.get('suggestions', [])
                 if improvements:
                     story.append(Paragraph('Areas for Improvement', heading_style))
                     for imp in improvements:
@@ -453,6 +476,11 @@ class AIFeedbackView(views.APIView):
                 Overall Band: {result.score}
                 
                 Data: {json.dumps(test_data, indent=2)}
+
+                CRITICAL INSTRUCTIONS:
+                - Be extremely honest and direct. Do not sugarcoat poor performance.
+                - If the student has many 0s or low scores, state clearly that they are NOT ready for the real exam.
+                - Identify patterns of errors (e.g., if they consistently skip difficult parts).
 
                 Provide a comprehensive, high-speed analysis in JSON format:
                 {{
@@ -614,6 +642,21 @@ class MockTaskSubmitView(views.APIView):
 
     def post(self, request):
         mock_task_id = request.data.get('task_id')
+
+        count = request.user.results.filter(type='mock').count()
+        plan = request.user.subscriptions.filter(active=True).first()
+        
+        if not plan or plan.plan.name == "free":
+            free_plan = plan.plan if plan else Plan.objects.filter(name="free").first()
+            limit = free_plan.test_limit if free_plan else 2 # default to 2 if something is missing
+            
+            if count >= limit:
+                return Response({
+                    "status": False,
+                    "message": f"You have completed {limit} free mock tasks. Please upgrade your plan to continue."
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+
         if not mock_task_id:
             return Response({"status": False, "error": "task_id is required"}, status=400)
 
@@ -625,10 +668,41 @@ class MockTaskSubmitView(views.APIView):
         if mock_task.completed:
             return Response({"status": False, "error": "Mock task already submitted"}, status=400)
 
+        # Check if already evaluated
+        from .models import Results
+        questions_map = {
+            "listening": mock_task.l_set,
+            "reading": mock_task.r_set,
+            "writing": mock_task.w_set,
+            "speaking": mock_task.s_set
+        }
+        existing_result = Results.objects.filter(user=request.user, type='mock', questions=questions_map).first()
+        if existing_result:
+            return Response({
+                "status": True,
+                "message": "Full mock test already evaluated",
+                "result_id": str(existing_result.id),
+                "overall_score": existing_result.feedback.get('overall_score'),
+                "feedback": existing_result.feedback
+            }, status=status.HTTP_200_OK)
+
         # Retrieve answers from request
         l_answers = request.data.get('listening_answers', {})
         r_answers = request.data.get('reading_answers', {})
         w_answers = request.data.get('writing_answers', {})
+        
+        # Parse JSON strings if they come as strings (common in multipart/form-data)
+        import json
+        if isinstance(l_answers, str):
+            try: l_answers = json.loads(l_answers)
+            except: l_answers = {}
+        if isinstance(r_answers, str):
+            try: r_answers = json.loads(r_answers)
+            except: r_answers = {}
+        if isinstance(w_answers, str):
+            try: w_answers = json.loads(w_answers)
+            except: w_answers = {}
+
         # Speaking Audio Files
         part1_audio = request.FILES.get('speaking_part1')
         part2_audio = request.FILES.get('speaking_part2')
@@ -652,19 +726,17 @@ class MockTaskSubmitView(views.APIView):
             w_feedback, _ = writing_eval(w_answers, w_instances, request.user) if w_instances.exists() else ({"score": 0}, None)
             w_score = float(w_feedback.get('score', 0))
 
-            # 4. Speaking Evaluation (Transcribe first, then eval)
+            # 4. Speaking Evaluation (Optimized Multimodal call)
             s_set = mock_task.s_set or {}
-            with ThreadPoolExecutor(max_workers=3) as executor:
-                f1 = executor.submit(get_transcript, part1_audio) if part1_audio else None
-                f2 = executor.submit(get_transcript, part2_audio) if part2_audio else None
-                f3 = executor.submit(get_transcript, part3_audio) if part3_audio else None
-                
-                t1 = f1.result() if f1 else "[NO ANSWER PROVIDED]"
-                t2 = f2.result() if f2 else "[NO ANSWER PROVIDED]"
-                t3 = f3.result() if f3 else "[NO ANSWER PROVIDED]"
-
-            s_feedback = speaking_eval(t1, t2, t3, s_set) if s_set else {"score": 0}
-            s_score = float(s_feedback.get('score', 0))
+            s_feedback = get_result_multimodal(part1_audio, part2_audio, part3_audio, s_set)
+            
+            # Extract transcripts and score for saving
+            s_transcripts = s_feedback.get('transcripts', {})
+            t1 = s_transcripts.get('part1', "[NO ANSWER PROVIDED]")
+            t2 = s_transcripts.get('part2', "[NO ANSWER PROVIDED]")
+            t3 = s_transcripts.get('part3', "[NO ANSWER PROVIDED]")
+            
+            s_score = float(s_feedback.get('overall_band_score', 0))
 
             # Calculate Overall Band Score (standard IELTS rounding: nearest 0.5)
             # Average the 4 scores, multiply by 2, round to nearest integer, divide by 2
@@ -686,7 +758,11 @@ class MockTaskSubmitView(views.APIView):
                     "listening": l_answers,
                     "reading": r_answers,
                     "writing": w_answers,
-                    "speaking": s_answers
+                    "speaking": {
+                        "part1": t1,
+                        "part2": t2,
+                        "part3": t3
+                    }
                 },
                 feedback={
                     "overall_score": overall_band,

@@ -16,7 +16,7 @@ class Plan(models.Model):
     ]
     DURATION = [
         ("month", "Monthly"),
-        ("anual","Annual"),
+        ("annual","Annual"),
         ("permanent", "Permanent"),
     ]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -50,7 +50,7 @@ class Subscriptions(models.Model):
         if plan_obj:
             if plan_obj.duration == 'month':
                 self.end = self.start + relativedelta(months=1)
-            elif plan_obj.duration == 'anual':
+            elif plan_obj.duration == 'annual':
                 self.end = self.start + relativedelta(years=1)
             elif plan_obj.duration == 'permanent':
                 self.end = None

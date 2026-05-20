@@ -188,19 +188,14 @@ class StripeWebhookView(APIView):
                     payment.invoice = invoice_url
                     payment.save()
                     
-                    # Deactivate existing active subscriptions for this user
-                    Subscriptions.objects.filter(user=payment.user, active=True).update(active=False)
-                    
-                    # Create/Activate new subscription
-                    Subscriptions.objects.create(
+                    Subscriptions.objects.update_or_create(
                         user=payment.user,
-                        plan=payment.plan,
-                        active=True
+                        defaults={'plan': payment.plan, 'active': True, 'start': timezone.now(), 'end': timezone.now() + timedelta(days=30) if payment.plan.duration=='month' else timezone.now() + timedelta(years=1) if payment.plan.duration=='annual' else None}
                     )
                     print(f"Subscription activated: User {payment.user.email} | Plan {payment.plan.name}")
                     
                 except Exception as e:
-                    print(f"Database update error: {str(e)}")
+                    print(f"Database update error: {str(e)}")   
             else:
                 print(f"Skipping: Metadata missing for {event['type']}. Available metadata: {metadata}")
         else:

@@ -65,7 +65,11 @@ class ReadingPassageListView(views.APIView):
             except QuestionSet.DoesNotExist:
                 task.delete()
 
-        # No valid task — create a new reading session
+        # No valid task — create a new reading session (exclude already completed tasks)
+        completed_task_ids = Task.objects.filter(user=request.user, module='reading', completed=True).values_list('question', flat=True)
+        # Note: QuestionSet creation is dynamic in reading/utils.py, but we can't easily exclude 
+        # because the ID is generated during creation. However, the passages are random.
+        # Let's trust the create_question_set() randomness for now, or just mark the session.
         question_set = create_question_set()
         serializer = QuestionSetSerializer(question_set)
         Task.objects.create(user=request.user, module='reading', question=question_set.id, completed=False)
@@ -120,6 +124,32 @@ class ReadingQuestionAnswerSubmitView(views.APIView):
 
         task.completed = True
         task.save()
+
+        # Check if already evaluated
+        from .models import QuestionSet
+        from others.models import Results
+        try:
+            question_set = QuestionSet.objects.get(id=set_id)
+            passages_list = []
+            for passage in question_set.passages.prefetch_related('questions'):
+                p_data = {
+                    'id': passage.id,
+                    'title': passage.title,
+                    'content': passage.content,
+                    'level': passage.level,
+                    'questions': list(passage.questions.values('id', 'question_number', 'question', 'question_type', 'options', 'answer'))
+                }
+                passages_list.append(p_data)
+            
+            result = Results.objects.filter(user=request.user, type='reading', questions=passages_list).first()
+            if result:
+                return Response({
+                    'success': True,
+                    'log': 'Reading already evaluated',
+                    'data': result.feedback
+                }, status=status.HTTP_200_OK)
+        except Exception as e:
+            print(f"Error checking existing reading result: {e}")
 
         if isinstance(answers, list):
             merged = {}

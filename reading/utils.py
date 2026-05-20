@@ -180,6 +180,7 @@ RULES — follow these strictly:
 1. Any question showing "[NO ANSWER PROVIDED]" means the student gave NO answer. Report it as unanswered. Do NOT invent or guess what the student might have written.
 2. Only base your feedback on what is literally shown above. Do not assume, hallucinate, or fill in missing answers.
 3. Scores must reflect the actual results above — do not inflate or deflate.
+4. Be very strict about accuracy. If many questions are wrong or unanswered, reflect this in the performance_breakdown as poor performance.
 
 Return ONLY valid JSON with this exact structure (no markdown, no explanation):
 

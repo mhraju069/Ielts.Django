@@ -112,6 +112,27 @@ class WritingResultCreateView(views.APIView):
 
         try:
             session = WritingTask.objects.get(id=session_id)
+            
+            # Check if already evaluated
+            tasks_data = []
+            for t in session.question.all():
+                tasks_data.append({
+                    "id": t.id,
+                    "title": t.title,
+                    "type": t.type,
+                    "question": t.question,
+                    "level": t.level,
+                    "image": t.image.url if t.image else None
+                })
+            
+            result = Results.objects.filter(user=request.user, type='writing', questions=tasks_data).first()
+            if result:
+                return Response({
+                    "status" : True,
+                    "message": "Writing already evaluated",
+                    "id": result.id,
+                    "result" : result.feedback
+                }, status=status.HTTP_200_OK)
 
         except WritingTask.DoesNotExist:
             return Response(

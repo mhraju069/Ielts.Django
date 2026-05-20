@@ -90,22 +90,57 @@ class SpeakingResultView(views.APIView):
     def post(self, request):
         data = request.data
 
-        part1_audio = data.get('audio1')
-        part2_audio = data.get('audio2')
-        part3_audio = data.get('audio3')
+        part1_audio = data.get('part1_audio')
+        part2_audio = data.get('part2_audio')
+        part3_audio = data.get('part3_audio')
+
         session_id  = data.get('session')
 
         # Only session_id is required; audio parts are optional
         if not session_id:
             return Response(
-                {'status': False, 'error': 'Missing field: session_id'},
+                {'status': False, 'error': 'Missing field: session'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+        # Check if already evaluated
+
 
         # Load questions from DB using session_id
         try:
             question_set = QuestionSet.objects.get(id=session_id)
+            
+            # Use filter+first instead of get to prevent MultipleObjectsReturned
+            task = Task.objects.filter(
+                user=request.user, module='speaking', question=session_id
+            ).order_by('-created_at').first()
+
+            if not task:
+                return Response(
+                    {'status': False, 'error': 'Speaking task session not found'},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            # Clean up any duplicate tasks for the same question
+            Task.objects.filter(
+                user=request.user, module='speaking', question=session_id
+            ).exclude(id=task.id).delete()
+
+            task.completed = True
+            task.save()
+
+            result = Results.objects.filter(user=request.user, type='speaking', questions=question_set.questions).first()
+            if result:
+                return Response({
+                    'status': True,
+                    'message': 'Speaking already evaluated',
+                    'transcripts': result.answers,
+                    'id': result.id,
+                    'result': result.feedback
+                }, status=status.HTTP_200_OK)
+
             questions = question_set.questions
+            
             # Only save answers for parts where audio was actually provided
             answers_to_create = []
             if part1_audio:
@@ -115,33 +150,20 @@ class SpeakingResultView(views.APIView):
             if part3_audio:
                 answers_to_create.append(SpeakingAnswer(session=question_set, part=3, audio=part3_audio))
             if answers_to_create:
+                from django.db import transaction
                 with transaction.atomic():
                     SpeakingAnswer.objects.bulk_create(answers_to_create)
 
         except QuestionSet.DoesNotExist:
             return Response(
-                {'status': False, 'error': 'Invalid or expired session_id'},
+                {'status': False, 'error': 'Invalid or expired session'},
                 status=status.HTTP_404_NOT_FOUND,
             )
-
-        # Use filter+first instead of get to prevent MultipleObjectsReturned
-        task = Task.objects.filter(
-            user=request.user, module='speaking', question=session_id
-        ).order_by('-created_at').first()
-
-        if not task:
-            return Response(
-                {'status': False, 'error': 'Speaking task session not found'},
-                status=status.HTTP_404_NOT_FOUND,
+        except Exception as e:
+             return Response(
+                {'status': False, 'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-
-        # Clean up any duplicate tasks for the same question
-        Task.objects.filter(
-            user=request.user, module='speaking', question=session_id
-        ).exclude(id=task.id).delete()
-
-        task.completed = True
-        task.save()
 
         # Transcribe only audio parts that were provided; use placeholder for missing ones
         NO_ANSWER = "[NO ANSWER PROVIDED]"

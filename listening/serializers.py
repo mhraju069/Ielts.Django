@@ -40,6 +40,15 @@ class ListeningTaskSerializer(serializers.ModelSerializer):
         minutes, seconds = divmod(remainder, 60)
         return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        request = self.context.get('request')
+        if request and representation.get('audio'):
+            audio_url = representation['audio']
+            if 'ngrok-free.dev' in audio_url:
+                representation['audio'] = audio_url.replace('http://', 'https://')
+        return representation
+
     def to_internal_value(self, data):
         # Convert to a mutable dict to avoid deepcopy issues with file objects in QueryDict
         if hasattr(data, 'dict'):
