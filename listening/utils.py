@@ -49,6 +49,21 @@ def _normalize_user_answer(raw_user_answer):
     return (None, "[NO ANSWER PROVIDED]") if not cleaned else (raw_user_answer, cleaned)
 
 
+def _get_answer_for_question(answers, q_num):
+    if answers is None:
+        return None
+    if isinstance(answers, dict):
+        if q_num in answers:
+            return answers[q_num]
+        try:
+            int_q = int(q_num)
+        except Exception:
+            int_q = None
+        if int_q is not None and int_q in answers:
+            return answers[int_q]
+    return answers.get(q_num)
+
+
 def get_result(task_id, answers):
     try:
         task = ListeningTask.objects.get(id=task_id)
@@ -65,7 +80,7 @@ def get_result(task_id, answers):
         q_num = str(q_data.get('question_number', ''))
         q_text = q_data.get('text', q_data.get('question', 'Unknown Question'))
         correct_answer = question.answer
-        raw_user_answer = answers.get(q_num)
+        raw_user_answer = _get_answer_for_question(answers, q_num)
         user_answer, display_answer = _normalize_user_answer(raw_user_answer)
 
         is_correct = False

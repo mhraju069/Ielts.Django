@@ -49,6 +49,20 @@ def _normalize_user_answer(raw_user_answer):
     cleaned = str(raw_user_answer).strip()
     return (None, "[NO ANSWER PROVIDED]") if not cleaned else (raw_user_answer, cleaned)
 
+def _get_answer_for_question(answers, q_num):
+    if answers is None:
+        return None
+    if isinstance(answers, dict):
+        if q_num in answers:
+            return answers[q_num]
+        try:
+            int_q = int(q_num)
+        except Exception:
+            int_q = None
+        if int_q is not None and int_q in answers:
+            return answers[int_q]
+    return answers.get(q_num)
+
 from others.models import Results
 
 
@@ -109,7 +123,7 @@ def get_result(set_id, answers):
     per_question_detail = []
 
     for q_num, correct_answer in correct_answers.items():
-        raw_user_answer = answers.get(str(q_num))
+        raw_user_answer = _get_answer_for_question(answers, str(q_num))
         is_correct  = False
         user_answer, display_answer = _normalize_user_answer(raw_user_answer)
 
@@ -314,7 +328,7 @@ def save_result(set_id, answers, user):
 
         for question_number, correct_answer in question_set.answers.items():
             total_questions += 1
-            user_answer = answers.get(question_number)
+            user_answer = _get_answer_for_question(answers, str(question_number))
 
             if isinstance(correct_answer, list):
                 if isinstance(user_answer, list):

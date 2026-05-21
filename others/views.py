@@ -436,6 +436,59 @@ def _clean_and_parse_json(raw: str) -> dict:
     return json.loads(text)
 
 
+def _normalize_result_answers(result):
+    raw_answers = result.answers or {}
+    sanitized = {}
+
+    if result.type == 'listening':
+        for q in result.questions or []:
+            q_num = str(q.get('question_number') or q.get('id') or '')
+            if not q_num:
+                continue
+            answer = raw_answers.get(q_num)
+            if answer is None and isinstance(raw_answers, dict):
+                try:
+                    answer = raw_answers.get(int(q_num))
+                except Exception:
+                    answer = None
+            if answer is None or (isinstance(answer, str) and not answer.strip()):
+                sanitized[q_num] = "[NO ANSWER PROVIDED]"
+            else:
+                sanitized[q_num] = answer
+        return sanitized
+
+    if result.type == 'reading':
+        for passage in result.questions or []:
+            for q in passage.get('questions', []):
+                q_num = str(q.get('question_number') or q.get('id') or '')
+                if not q_num:
+                    continue
+                answer = raw_answers.get(q_num)
+                if answer is None and isinstance(raw_answers, dict):
+                    try:
+                        answer = raw_answers.get(int(q_num))
+                    except Exception:
+                        answer = None
+                if answer is None or (isinstance(answer, str) and not answer.strip()):
+                    sanitized[q_num] = "[NO ANSWER PROVIDED]"
+                else:
+                    sanitized[q_num] = answer
+        return sanitized
+
+    for k, v in raw_answers.items():
+        if v is None or (isinstance(v, str) and not v.strip()):
+            sanitized[k] = "[NO ANSWER PROVIDED]"
+        elif isinstance(v, dict):
+            sanitized_v = dict(v)
+            inner = v.get('user_answer', '')
+            if inner is None or (isinstance(inner, str) and not inner.strip()):
+                sanitized_v['user_answer'] = "[NO ANSWER PROVIDED]"
+            sanitized[k] = sanitized_v
+        else:
+            sanitized[k] = v
+    return sanitized
+
+
 class AIFeedbackView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -506,19 +559,7 @@ class AIFeedbackView(views.APIView):
                 """
             else:
                 # --- STANDARD SINGLE MODULE ANALYSIS ---
-                raw_answers = result.answers or {}
-                sanitized_answers = {}
-                for k, v in raw_answers.items():
-                    if v is None or (isinstance(v, str) and not v.strip()):
-                        sanitized_answers[k] = "[NO ANSWER PROVIDED]"
-                    elif isinstance(v, dict):
-                        sanitized_v = dict(v)
-                        inner = v.get('user_answer', '')
-                        if inner is None or (isinstance(inner, str) and not inner.strip()):
-                            sanitized_v['user_answer'] = "[NO ANSWER PROVIDED]"
-                        sanitized_answers[k] = sanitized_v
-                    else:
-                        sanitized_answers[k] = v
+                sanitized_answers = _normalize_result_answers(result)
 
                 test_data = {
                     "type": result.type,

@@ -105,7 +105,7 @@ class ListeningQuestionAnswerSubmitView(views.APIView):
         task_id = data.get('task_id')
         answers = data.get('answers', [])
 
-        if not task_id or not answers:
+        if not task_id or answers is None:
             return Response({
                 'success': False,
                 'message': 'Task ID and answers are required'

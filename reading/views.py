@@ -91,7 +91,7 @@ class ReadingQuestionAnswerSubmitView(views.APIView):
         set_id = data.get('set_id')
         answers = data.get('answers', [])
 
-        if not set_id or not answers:
+        if not set_id or answers is None:
             return Response({
                 'success': False,
                 'log': 'Set ID and answers are required',
